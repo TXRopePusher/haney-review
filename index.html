@@ -60,6 +60,11 @@
   .railtabs { display: flex; border-bottom: 1px solid var(--line); }
   .railtabs button { flex: 1; border: 0; background: transparent; padding: 12px 8px; font-weight: 600; font-size: 13px; color: var(--soft); cursor: pointer; border-bottom: 2px solid transparent; }
   .railtabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+  .railtabs .fold { flex: 0 0 46px; padding: 0; font-size: 22px; line-height: 1; border-left: 1px solid var(--line); }
+  .railtabs .fold span { display: inline-block; transition: transform .2s; }
+  main.folded { grid-template-columns: 1fr 0; } main.folded aside.rail { display: none; }
+  .unfold { display: none; position: absolute; top: 12px; right: 12px; z-index: 6; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 10px; padding: 9px 14px; font: 600 13px var(--body); cursor: pointer; box-shadow: var(--shadow); }
+  main.folded .unfold { display: inline-block; }
   .pane { overflow: auto; min-height: 0; padding: 16px; display: grid; gap: 14px; align-content: start; }
   .eyebrow { font: 600 11px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--soft); }
   h2 { margin: 0; font: 700 22px/1.1 var(--display); text-wrap: balance; }
@@ -116,6 +121,10 @@
     main { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(220px, 44%); }
     main.sheet-tall { grid-template-rows: minmax(0, 1fr) minmax(220px, 62%); }
     aside.rail { border-left: 0; border-top: 1px solid var(--line); box-shadow: 0 -8px 24px rgba(0,0,0,.12); }
+    main.folded { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; }
+    main.folded aside.rail { display: grid; grid-template-rows: auto; padding-bottom: env(safe-area-inset-bottom, 0px); }
+    main.folded .pane { display: none !important; } main.folded .unfold { display: none; }
+    .railtabs .fold span { transform: rotate(90deg); } main.folded .railtabs .fold span { transform: rotate(-90deg); }
     .brand span { display: none; }
     .brand b { font-size: 20px; }
     header.bar { gap: 8px; padding-top: 8px; padding-bottom: 8px; }
@@ -153,6 +162,7 @@
       <div id="pins"></div>
       <div id="loading">Loading the house…</div>
       <div class="tip" id="tip" hidden></div>
+      <button class="unfold" id="unfold">‹ Comments</button>
       <div class="controls" id="controls3d">
         <div class="grp" role="group" aria-label="Camera">
           <button data-cam="front">Front</button><button data-cam="entry">Entry</button><button data-cam="left">Garage side</button>
@@ -170,6 +180,7 @@
         <button role="tab" aria-selected="true" data-pane="compose">Comment</button>
         <button role="tab" aria-selected="false" data-pane="all">All comments <span id="count"></span></button>
         <button role="tab" aria-selected="false" data-pane="find">Find</button>
+        <button class="fold" id="foldbtn" aria-label="Hide panel" aria-expanded="true" title="Hide panel"><span>›</span></button>
       </div>
       <div class="pane" id="pane-compose"></div>
       <div class="pane" id="pane-all" hidden></div>
@@ -218,7 +229,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 // ================= feedback store: a private GitHub repo, one JSON file per comment =================
 const STORE = { owner: 'TXRopePusher', repo: 'haney-feedback', branch: 'main' };
-const KEY = 'ce41e7e0d6f1d62bf1becfbdfea4153a', SEALED = 'BAxAWRBVOkAFQjkAVXd9KTB0VTxTJFcGPwAkRmh6SiAxOgxiNW4sYCUGCwE3XEg7Un8lLCwLGiMNHAV1a2QDEjswVwEtWQZkJ3IeYxRkdDoxB1AwVScnITUyJAxo';
+const KEY = '7ddfaa73cdc163c267383d71b9bc2193', SEALED = 'UA0QDhQDaEMCEDwAB3IseWByBGEDJgJTO1wnEWt+QHJlO1w1MTh+YyJUDgFlWRlrAnl0cXwJT3YJQAYiaGAJQG8xB1YpD1RnICAbY0ZhJWphAQFtBSVydDFuJ1tr';
 const TOKEN = (() => { const b = atob(SEALED), k = KEY; let s = ''; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b.charCodeAt(i) ^ k.charCodeAt(i % k.length)); return s; })();
 const API = `https://api.github.com/repos/${STORE.owner}/${STORE.repo}/contents/`;
 const H = (extra) => ({ Authorization: 'Bearer ' + TOKEN, 'X-GitHub-Api-Version': '2022-11-28', ...extra });
@@ -270,8 +281,8 @@ let draftImages = [];   // {blob, w, h, url}
 
 // ================= 3D =================
 const MOBILE = matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 760;
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: !MOBILE || devicePixelRatio < 2, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE ? 1.5 : 2)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE ? 2 : 2.5)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
 const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(40, 1, 1, 3000);
 const controls = new OrbitControls(camera, canvas); controls.enableDamping = true; let needsRender = true; controls.addEventListener('change', () => { needsRender = true; }); controls.maxPolarAngle = Math.PI * 0.495; controls.minDistance = 12; controls.maxDistance = 600;
@@ -445,7 +456,10 @@ function drawPins() {
 // ================= rail: compose / thread =================
 const fmtTime = iso => { const d = new Date(iso); return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); };
 const h = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
-function sheet(tall) { document.querySelector('main').classList.toggle('sheet-tall', !!tall); }
+function fold(on) { const m = document.querySelector('main'); m.classList.toggle('folded', on); if (on) m.classList.remove('sheet-tall'); $('foldbtn').setAttribute('aria-expanded', String(!on)); $('foldbtn').setAttribute('aria-label', on ? 'Show panel' : 'Hide panel'); $('foldbtn').title = on ? 'Show panel' : 'Hide panel'; try { localStorage.setItem('haney-fold', on ? '1' : '0'); } catch {} }
+$('foldbtn').onclick = () => fold(!document.querySelector('main').classList.contains('folded')); $('unfold').onclick = () => fold(false);
+try { if (localStorage.getItem('haney-fold') === '1') fold(true); } catch {}
+function sheet(tall) { if (tall) fold(false); document.querySelector('main').classList.toggle('sheet-tall', !!tall); }
 function select(id, point) {
   selected = id ? objs.get(String(id)) || null : null; lastPoint = point || null; openThread = null;
   highlight3d(); highlightPlan(); showPane('compose'); renderCompose(); drawPins(); sheet(!!selected);
@@ -522,7 +536,7 @@ function renderAll() {
   drawPins(); if (openThread || !selected) renderCompose();
 }
 function showPane(p) { document.querySelectorAll('[data-pane]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.pane === p))); ['compose', 'all', 'find'].forEach(x => $('pane-' + x).hidden = x !== p); }
-document.querySelectorAll('[data-pane]').forEach(b => b.onclick = () => showPane(b.dataset.pane));
+document.querySelectorAll('[data-pane]').forEach(b => b.onclick = () => { fold(false); showPane(b.dataset.pane); });
 function lightbox(url) { $('lbimg').src = url; $('lightbox').hidden = false; }
 $('lightbox').onclick = () => $('lightbox').hidden = true;
 addEventListener('keydown', e => { if (e.key === 'Escape') { $('lightbox').hidden = true; $('finished').hidden = true; } });
