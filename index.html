@@ -230,7 +230,7 @@ import { Sky } from 'three/addons/objects/Sky.js';
 
 // ================= feedback store: a private GitHub repo, one JSON file per comment =================
 const STORE = { owner: 'TXRopePusher', repo: 'haney-feedback', branch: 'main' };
-const KEY = 'fe6c8fdad4269037e59661d07ffefef9', SEALED = 'AQxCC00EOxEFQG0HCHF8fDNwDm8Gc1FSbgMjFz8qH3g0Og4waD8tMSUEXwZqWkluUXt+f3lcHHdcHwIkPDRWSj4wVVNwCAc1J3BKZElidW8yAwtjAHAhdWQxI10/';
+const KEY = 'c7f154fd3b573c046ebfb472d7b5d8bd', SEALED = 'BF4SWUBWORRSFmoGAiJ/f2AgVT9SdgJQPVInRz13GyUxaF5iZW0vNHJSWAdgCUptAislLy1ZT3UPTgZ0PmlSFztiBQF9WgUwcCZNZUMxdmxhU1AzVHVydzdgJw09';
 const TOKEN = (() => { const b = atob(SEALED), k = KEY; let s = ''; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b.charCodeAt(i) ^ k.charCodeAt(i % k.length)); return s; })();
 const API = `https://api.github.com/repos/${STORE.owner}/${STORE.repo}/contents/`;
 const H = (extra) => ({ Authorization: 'Bearer ' + TOKEN, 'X-GitHub-Api-Version': '2022-11-28', ...extra });
@@ -304,11 +304,11 @@ const MAT = {
   fascia: std({ color: 0xebe2cd, roughness: .55 }),
   glass: new THREE.MeshPhysicalMaterial({ color: 0x24333d, roughness: .04, metalness: .05, clearcoat: 1, clearcoatRoughness: .02, envMapIntensity: 3.2, side: THREE.DoubleSide }),
   frame: std({ color: 0x1c1c1c, roughness: .4, metalness: .2 }), wood: std({ color: 0x4f2e1b, roughness: .42 }), metal: std({ color: 0x8c8c88, roughness: .32, metalness: .75 }),
-  garage: std({ color: 0xece6d6, roughness: .42, metalness: .15 }), concrete: std({ ...maps('conc', false), normalScale: V2(.6) }),
+  garage: std({ color: 0xece6d6, roughness: .42, metalness: .15 }), cedar: std({ ...maps('cedar', false), normalScale: V2(.5) }),   // stained cedar carriage doors concrete: std({ ...maps('conc', false), normalScale: V2(.6) }),
   interior: std({ color: 0xd9d4ca, roughness: .9 }), post: std({ color: 0x7a4e2c, roughness: .7 }) };
 function pick(name, cat) { const n = name.toLowerCase();
   if (n.includes('stone')) return { m: MAT.stone, uv: 4.4 }; if (n.includes('shingle')) return { m: MAT.roof, uv: 6.6 }; if (cat === 'roof') return { m: MAT.fascia };
-  if (n.includes('glass')) return { m: MAT.glass }; if (n.includes('clad')) return { m: MAT.frame }; if (n.includes('cherry') || n.includes('stained')) return { m: MAT.wood };
+  if (n.includes('glass')) return { m: MAT.glass }; if (n.includes('cedar')) return { m: MAT.cedar, uv: 3.2 }; if (n.includes('clad')) return { m: MAT.frame }; if (n.includes('cherry') || n.includes('stained')) return { m: MAT.wood };
   if (n.includes('aluminum')) return { m: MAT.metal }; if (n.includes('ivory') || (n === 'default' && cat === 'door')) return { m: MAT.garage }; if (n.includes('concrete')) return { m: MAT.concrete, uv: 6.56 };
   if (cat === 'column') return { m: n.includes('lumber') ? MAT.post : MAT.stone, uv: 4.4 }; if (cat === 'chimney') return { m: MAT.stone, uv: 4.4 }; return { m: MAT.interior }; }
 function planarUV(pos, tile) { const uv = new Float32Array(pos.length / 3 * 2), a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3(), u = new THREE.Vector3(), v = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), t = new THREE.Vector3();
