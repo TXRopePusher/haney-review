@@ -230,7 +230,7 @@ import { Sky } from 'three/addons/objects/Sky.js';
 
 // ================= feedback store: a private GitHub repo, one JSON file per comment =================
 const STORE = { owner: 'TXRopePusher', repo: 'haney-feedback', branch: 'main' };
-const KEY = 'c7f154fd3b573c046ebfb472d7b5d8bd', SEALED = 'BF4SWUBWORRSFmoGAiJ/f2AgVT9SdgJQPVInRz13GyUxaF5iZW0vNHJSWAdgCUptAislLy1ZT3UPTgZ0PmlSFztiBQF9WgUwcCZNZUMxdmxhU1AzVHVydzdgJw09';
+const KEY = '91e45c1db20379138e0468594866e689', SEALED = 'XlgRXEABbhQDRm8CBnh+eG4gB20GegBbbV1zRDx5QXhrbl1nZTp4NCMCXQNkU0tqDCt3fXlVTX5fQVJ3P2cISmFkBgR9DVIwIXZIYUdrd2tvUwJhAHlwfGdvcw48';
 const TOKEN = (() => { const b = atob(SEALED), k = KEY; let s = ''; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b.charCodeAt(i) ^ k.charCodeAt(i % k.length)); return s; })();
 const API = `https://api.github.com/repos/${STORE.owner}/${STORE.repo}/contents/`;
 const H = (extra) => ({ Authorization: 'Bearer ' + TOKEN, 'X-GitHub-Api-Version': '2022-11-28', ...extra });
@@ -283,13 +283,15 @@ let draftImages = [];   // {blob, w, h, url}
 // ================= 3D =================
 const MOBILE = matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 760;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE ? 2 : 2.5)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE ? 1.75 : 2.5));
+// phones can drop the WebGL context under memory pressure, which freezes the view; reload the scene when that happens
+canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); $('loading').textContent = 'Reloading the 3D view…'; $('loading').hidden = false; setTimeout(() => location.reload(), 600); }); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
 const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(40, 1, 1, 6000);
 const controls = new OrbitControls(camera, canvas); controls.enableDamping = true; let needsRender = true; controls.addEventListener('change', () => { needsRender = true; }); controls.maxPolarAngle = Math.PI * 0.495; controls.minDistance = 12; controls.maxDistance = 600;
 const M3 = (x, y, z) => new THREE.Vector3(x, z, -y);
 function rng(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
-const loader = new THREE.TextureLoader(), ANISO = Math.min(16, renderer.capabilities.getMaxAnisotropy());
+const loader = new THREE.TextureLoader(), ANISO = Math.min(MOBILE ? 4 : 16, renderer.capabilities.getMaxAnisotropy());
 // scanned CC0 texture sets in tex/: <key>_<col|nor|rgh>_<size>.jpg; phones get 1k, others 2k where available
 function maps(key, hi) { const sz = hi && !MOBILE ? 2048 : 1024, o = {};
   for (const [k, slot] of [['col', 'map'], ['nor', 'normalMap'], ['rgh', 'roughnessMap']]) {
@@ -369,7 +371,7 @@ const bark = std({ color: 0x4a3a2d, roughness: 1 });
       br.quaternion.setFromUnitVectors(up, dir); br.position.set(0, H - s, 0).addScaledVector(dir, L / 2); t.add(br);
       lobes.push(new THREE.Vector3(0, H - s, 0).addScaledVector(dir, L).add(new THREE.Vector3(0, 2.5 * s, 0))); }
     lobes.push(new THREE.Vector3(0, H + 6 * s, 0));
-    const N = MOBILE ? 650 : 1100, cards = new THREE.InstancedMesh(new THREE.PlaneGeometry(3.6 * s, 3.6 * s), leafMat, N);
+    const N = MOBILE ? 380 : 1100, cards = new THREE.InstancedMesh(new THREE.PlaneGeometry(3.6 * s, 3.6 * s), leafMat, N);
     for (let i = 0; i < N; i++) { const c = lobes[i % lobes.length], R = (6.5 + r() * 2.5) * s, u = r() * 2 - 1, ph = r() * Math.PI * 2, rr = R * (.6 + .4 * Math.cbrt(r())), q = Math.sqrt(1 - u * u);
       dummy.position.set(c.x + Math.cos(ph) * q * rr, c.y + u * rr * .62, c.z + Math.sin(ph) * q * rr);
       dummy.lookAt(dummy.position.clone().sub(c).multiplyScalar(2).add(c)); dummy.rotateZ(r() * Math.PI * 2); dummy.rotateX((r() - .5) * .8); dummy.updateMatrix(); cards.setMatrixAt(i, dummy.matrix);
@@ -391,7 +393,7 @@ const bark = std({ color: 0x4a3a2d, roughness: 1 });
   keep.sort((a, b) => a.z - b.z || a.x - b.x);
   for (let i = 0; i < keep.length;) { let j = i; while (j + 1 < keep.length && Math.abs(keep[j + 1].z - keep[i].z) < .1 && keep[j + 1].x - keep[j].x < 4.5) j++;
     const xa = keep[i].x - 3, xb = keep[j].x + 3, bed = new THREE.Mesh(new THREE.PlaneGeometry(xb - xa, 5.4), mulch); bed.rotation.x = -Math.PI / 2; bed.position.set((xa + xb) / 2, -.44, keep[i].z); bed.receiveShadow = true; bed.userData.id = 'site'; bed.userData.base = mulch; scene.add(bed); sitePick.push(bed); i = j + 1; }
-  const per = MOBILE ? 40 : 70, shrubs = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.5, 1.5), leafMat, keep.length * per);
+  const per = MOBILE ? 26 : 70, shrubs = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.5, 1.5), leafMat, keep.length * per);
   keep.forEach((c0, k) => { const R = 1.6 + r() * .5, c = c0.clone().setY(R * .75 - .5);
     for (let i = 0; i < per; i++) { const u = r() * 2 - 1, ph = r() * Math.PI * 2, rr = R * (.55 + .45 * Math.cbrt(r())), q = Math.sqrt(1 - u * u);
       dummy.position.set(c.x + Math.cos(ph) * q * rr, Math.max(-.2, c.y + u * rr * .8), c.z + Math.sin(ph) * q * rr);
@@ -455,7 +457,8 @@ function drawPlan() {
   for (const s of P.slabs) { if (s.house) continue; for (const l of s.loops) el('polygon', { points: pts(l), fill: c('--porch'), stroke: c('--roofline'), 'stroke-width': .08, 'data-id': s.id, class: 'pk' }, gSlab); }
   for (const r of P.rooms) { const d = r.loops.map(l => 'M' + pts(l).split(' ').join('L') + 'Z').join(''); el('path', { d, fill: 'transparent', 'fill-rule': 'evenodd', 'data-id': r.id, class: 'pk room' }, gRoom);
     const t = el('text', { x: r.x, y: -r.y, 'text-anchor': 'middle', 'font-size': 1.15, 'font-weight': 600, fill: c('--ink'), 'letter-spacing': .05 }, gLab); t.textContent = r.label.toUpperCase();
-    const a = el('text', { x: r.x, y: -r.y + 1.5, 'text-anchor': 'middle', 'font-size': .95, fill: c('--soft') }, gLab); a.textContent = r.area + ' SF'; }
+    const a = el('text', { x: r.x, y: -r.y + 1.5, 'text-anchor': 'middle', 'font-size': .95, fill: c('--soft') }, gLab); a.textContent = r.area + ' SF';
+    if (r.dims) { const m = el('text', { x: r.x, y: -r.y + 2.75, 'text-anchor': 'middle', 'font-size': .9, fill: c('--soft') }, gLab); m.textContent = r.dims; } }
   for (const r of P.roofs) for (const l of r.loops) el('polygon', { points: pts(l), fill: 'none', stroke: c('--roofline'), 'stroke-width': .1, 'stroke-dasharray': '.8 .5' }, gRoof);
   gRoof.style.display = $('roofline').getAttribute('aria-pressed') === 'true' ? '' : 'none';
   for (const w of P.walls) { const d = w.loops.map(l => 'M' + pts(l).split(' ').join('L') + 'Z').join(''); el('path', { d, fill: w.kind === 'int' ? c('--wall-int') : c('--wall-ext'), 'fill-rule': 'evenodd', 'data-id': w.id, class: 'pk wall' }, gWall); }
