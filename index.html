@@ -230,7 +230,7 @@ import { Sky } from 'three/addons/objects/Sky.js';
 
 // ================= feedback store: a private GitHub repo, one JSON file per comment =================
 const STORE = { owner: 'TXRopePusher', repo: 'haney-feedback', branch: 'main' };
-const KEY = '09e074408950d973876d04a0f4c65044', SEALED = 'V1ARWEJWa0BZTWoBVXh4eG5yAT0AdlRSP1EmRGx/TXViZl1jZ219YHkJWAA3U01qDHlxLX9ZGXcNTQd3b2EER2hsBgB/Wldke31NYhRrcWtvAQQxBnUkdTVjJg5s';
+const KEY = '566c0e2fcc18065e452cd9c603cd9224', SEALED = 'Ul9CC0UHbRYCF24JAXd6LmJwBTpUe1ZUaVYmFmB9S3VnaQ4wYDx7NiJTXAhjXE88AHt1KitUG3FbSgclY2MCR21jVVN4C1EyICdJakBkcz1jAwA2Ungmc2NkJlxg';
 const TOKEN = (() => { const b = atob(SEALED), k = KEY; let s = ''; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b.charCodeAt(i) ^ k.charCodeAt(i % k.length)); return s; })();
 const API = `https://api.github.com/repos/${STORE.owner}/${STORE.repo}/contents/`;
 const H = (extra) => ({ Authorization: 'Bearer ' + TOKEN, 'X-GitHub-Api-Version': '2022-11-28', ...extra });
@@ -259,7 +259,7 @@ const uid = () => new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14) 
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } };
 
 // ================= model data =================
-const BUILD = '20261024171306';   // stamped by publish.py so phones and browsers never mix cached files from different builds
+const BUILD = '20261024172137';   // stamped by publish.py so phones and browsers never mix cached files from different builds
 const DATA = await (await fetch('data.json?b=' + BUILD)).json();
 // real site: USGS 3DEP lidar terrain, USDA NAIP imagery, existing structures and trees (built by geo_build.py)
 const SITE = await fetch('site.json?b=' + BUILD).then(r => r.ok ? r.json() : null).catch(() => null);
@@ -442,6 +442,13 @@ const bark = std({ color: 0x4a3a2d, roughness: 1 });
       const tri = new THREE.Shape([new THREE.Vector2(-(along ? d : w) / 2, 0), new THREE.Vector2((along ? d : w) / 2, 0), new THREE.Vector2(0, st.ridge - st.eave)]);
       for (const side of [-1, 1]) { const gm = add(new THREE.ShapeGeometry(tri), wMat(st.wall), 0, 0, 0); gm.material.side = THREE.DoubleSide;
         if (along) { gm.rotation.y = Math.PI / 2; gm.position.set(cx + side * w / 2, base + st.eave, -cy); } else gm.position.set(cx, base + st.eave, -cy + side * d / 2); }
+      if (st.trim) {    // metal building trim: corner trims, eave trim along both eaves, base trim
+        const tm = mMat(st.trim), e = base + st.eave;
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) add(new THREE.BoxGeometry(.35, st.eave, .35), tm, cx + sx * w / 2, base + st.eave / 2, -cy + sz * d / 2);
+        if (along) { for (const sz of [-1, 1]) add(new THREE.BoxGeometry(w + 2 * ov, .5, .3), tm, cx, e - .1, -cy + sz * (d / 2 + ov)); }
+        else { for (const sx of [-1, 1]) add(new THREE.BoxGeometry(.3, .5, d + 2 * ov), tm, cx + sx * (w / 2 + ov), e - .1, -cy); }
+        add(new THREE.BoxGeometry(w + .1, .45, d + .1), tm, cx, base + .22, -cy);
+      }
     } } }
 { const r = rng(33), dummy = new THREE.Object3D(), col = new THREE.Color(), keep = [];
   const front = [], avoid = [];
