@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Haney Residence · Design Review</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: one-screen client review portal. Top bar (project, view switch, reviewer, finish), full-bleed stage
+     (3D exterior or floor plan) with comment pins, right rail (comment / all comments / find) that becomes a bottom sheet on phones. */
+  :root {
+    --bg: #f3efe7; --stage: #e9e3d6; --panel: #fffcf6; --line: #ddd4c4; --ink: #24211d; --soft: #6e665a;
+    --accent: #8c5a2e; --accent-ink: #fffaf1; --hover: #f1eadc; --pin: #b5452b; --pin-ink: #fff;
+    --wall-ext: #3b3631; --wall-int: #7a7166; --room-hi: rgba(140, 90, 46, 0.10); --room-sel: rgba(140, 90, 46, 0.22); --porch: #e2dbcd; --roofline: #a3998a;
+    --sky-top: #9cc0dc; --sky-bottom: #ece9e2; --shadow: 0 10px 30px rgba(40, 30, 20, .16);
+    --display: "Barlow Condensed", "Arial Narrow", sans-serif; --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) { :root {
+    --bg: #1b1a18; --stage: #23211e; --panel: #201e1b; --line: #3d3832; --ink: #efe9df; --soft: #b0a796;
+    --accent: #d59a5c; --accent-ink: #1b1a18; --hover: #2c2924; --pin: #e0745a; --pin-ink: #1b1a18;
+    --wall-ext: #e6dfd3; --wall-int: #a69d8f; --room-hi: rgba(213, 154, 92, 0.10); --room-sel: rgba(213, 154, 92, 0.24); --porch: #34302a; --roofline: #6d665b;
+    --sky-top: #1d2a3a; --sky-bottom: #3d4450; --shadow: 0 10px 30px rgba(0, 0, 0, .45); color-scheme: dark; } }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  #donebtn .short { display: none; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.45 var(--body); overflow: hidden; }
+  button { font: inherit; color: inherit; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .app { height: 100%; height: 100dvh; display: grid; grid-template-rows: auto 1fr; padding-top: env(safe-area-inset-top, 0px); }
+  header.bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 10px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px)); border-bottom: 1px solid var(--line); background: var(--panel); z-index: 6; }
+  .brand { display: grid; line-height: 1.05; min-width: 0; margin-right: auto; }
+  .brand b { font: 700 24px/1 var(--display); letter-spacing: .01em; }
+  .brand span { font: 600 11px/1.4 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--soft); }
+  .tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; padding: 3px; gap: 2px; }
+  .tabs button { font-weight: 600; font-size: 13px; border: 0; background: transparent; padding: 7px 14px; border-radius: 6px; cursor: pointer; }
+  .tabs button[aria-selected="true"] { background: var(--ink); color: var(--bg); }
+  .who { font-size: 13px; color: var(--soft); border: 0; background: transparent; cursor: pointer; padding: 6px 8px; border-radius: 6px; }
+  .who:hover { background: var(--hover); }
+  .who b { color: var(--ink); font-weight: 600; }
+  .btn { font-weight: 600; font-size: 13.5px; border-radius: 8px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--line); background: transparent; }
+  .btn:hover { background: var(--hover); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .btn.primary:hover { filter: brightness(1.05); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .iconbtn { border: 1px solid var(--line); background: transparent; width: 34px; height: 34px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+  main { position: relative; display: grid; grid-template-columns: 1fr 380px; min-height: 0; }
+  .stage { position: relative; background: var(--stage); min-width: 0; overflow: hidden; }
+  #three, #plan { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #plan { cursor: grab; } #plan.panning { cursor: grabbing; }
+  #pins { position: absolute; inset: 0; pointer-events: none; }
+  .pin { position: absolute; transform: translate(-50%, -100%); pointer-events: auto; border: 0; cursor: pointer; background: var(--pin); color: var(--pin-ink); font: 700 12px/1 var(--body); min-width: 26px; height: 26px; padding: 0 7px; border-radius: 13px 13px 13px 3px; box-shadow: 0 3px 10px rgba(0,0,0,.25); }
+  .pin.open { outline: 3px solid var(--panel); }
+  .pin.draft { background: var(--accent); color: var(--accent-ink); }
+  aside.rail { border-left: 1px solid var(--line); background: var(--panel); display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+  .railtabs { display: flex; border-bottom: 1px solid var(--line); }
+  .railtabs button { flex: 1; border: 0; background: transparent; padding: 12px 8px; font-weight: 600; font-size: 13px; color: var(--soft); cursor: pointer; border-bottom: 2px solid transparent; }
+  .railtabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+  .pane { overflow: auto; min-height: 0; padding: 16px; display: grid; gap: 14px; align-content: start; }
+  .eyebrow { font: 600 11px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--soft); }
+  h2 { margin: 0; font: 700 22px/1.1 var(--display); text-wrap: balance; }
+  .info { font: 400 12.5px/1.5 var(--mono); color: var(--soft); }
+  .hint { color: var(--soft); font-size: 14px; margin: 0; }
+  textarea { width: 100%; min-height: 96px; resize: vertical; font: 16px/1.45 var(--body); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .drop { border: 1px dashed var(--line); border-radius: 10px; padding: 10px; display: grid; gap: 8px; }
+  .drop.over { border-color: var(--accent); background: var(--hover); }
+  .thumbs { display: flex; gap: 8px; flex-wrap: wrap; }
+  .thumb { position: relative; width: 74px; height: 74px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--bg); }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: zoom-in; }
+  .thumb button { position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 10px; border: 0; background: rgba(0,0,0,.6); color: #fff; font-size: 12px; line-height: 20px; cursor: pointer; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .status { font-size: 13px; color: var(--soft); }
+  .status.err { color: var(--pin); }
+  .thread { display: grid; gap: 12px; }
+  .msg { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+  .msg .meta { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--soft); }
+  .msg .meta b { color: var(--ink); font-weight: 600; }
+  .msg p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .msg.reply { margin-left: 18px; }
+  .list { display: grid; gap: 4px; }
+  .citem { display: grid; gap: 2px; text-align: left; border: 0; background: transparent; padding: 10px; border-radius: 8px; cursor: pointer; border-left: 3px solid transparent; }
+  .citem:hover { background: var(--hover); }
+  .citem.active { border-left-color: var(--pin); background: var(--hover); }
+  .citem .top { display: flex; gap: 8px; align-items: baseline; justify-content: space-between; font-size: 12.5px; color: var(--soft); }
+  .citem .top b { color: var(--ink); }
+  .citem .lab { font-weight: 600; font-size: 13.5px; }
+  .citem .snip { font-size: 13.5px; color: var(--soft); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .num { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--pin); color: var(--pin-ink); font: 700 11px var(--body); margin-right: 6px; }
+  .finder input { width: 100%; font: 400 16px var(--body); padding: 9px 11px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+  .cats { display: flex; gap: 6px; flex-wrap: wrap; }
+  .cats button { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; background: transparent; color: var(--soft); cursor: pointer; }
+  .cats button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .objs h3 { font: 600 11px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--soft); margin: 14px 4px 4px; }
+  .obj { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; width: 100%; text-align: left; border: 0; background: transparent; font-size: 13.5px; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+  .obj:hover { background: var(--hover); }
+  .obj small { font: 400 11px var(--mono); color: var(--soft); white-space: nowrap; }
+  .controls { position: absolute; left: max(12px, env(safe-area-inset-left, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 6px; flex-wrap: wrap; max-width: calc(100% - 24px); }
+  .controls .grp { display: flex; gap: 2px; padding: 3px; border-radius: 9px; background: var(--panel); border: 1px solid var(--line); flex-wrap: wrap; box-shadow: var(--shadow); }
+  .controls button { font-weight: 600; font-size: 12.5px; border: 0; background: transparent; padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+  .controls button:hover { background: var(--hover); }
+  .controls button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+  .tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--bg); font: 500 12.5px var(--body); padding: 5px 9px; border-radius: 6px; transform: translate(12px, 12px); white-space: nowrap; z-index: 4; }
+  .overlay { position: fixed; inset: 0; background: rgba(20, 18, 15, 0.55); display: grid; place-items: center; z-index: 20; padding: 16px; }
+  .dialog { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; max-width: 540px; width: 100%; padding: 26px; display: grid; gap: 14px; max-height: 92%; overflow: auto; box-shadow: var(--shadow); }
+  .dialog h1 { margin: 0; font: 700 34px/1 var(--display); }
+  .dialog ol { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
+  .dialog input { font: 400 16px var(--body); padding: 11px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
+  .lightbox img { max-width: 92vw; max-height: 86vh; border-radius: 8px; box-shadow: var(--shadow); }
+  #loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--soft); font: 600 13px var(--display); letter-spacing: .14em; text-transform: uppercase; pointer-events: none; }
+  svg text { font-family: var(--body); }
+  @media (max-width: 860px) {
+    main { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(220px, 44%); }
+    main.sheet-tall { grid-template-rows: minmax(0, 1fr) minmax(220px, 62%); }
+    aside.rail { border-left: 0; border-top: 1px solid var(--line); box-shadow: 0 -8px 24px rgba(0,0,0,.12); }
+    .brand span { display: none; }
+    .brand b { font-size: 20px; }
+    header.bar { gap: 8px; padding-top: 8px; padding-bottom: 8px; }
+    .tabs button { padding: 7px 10px; }
+    .who .lbl { display: none; }
+    .controls { left: 0; right: 0; max-width: none; padding: 0 max(10px, env(safe-area-inset-left, 0px)); flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; bottom: 8px; }
+    .controls::-webkit-scrollbar { display: none; }
+    .controls .grp { flex-wrap: nowrap; flex-shrink: 0; }
+    .controls button { padding: 8px 11px; }
+    .pane { padding: 14px max(14px, env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px)); }
+    .pin { min-width: 30px; height: 30px; border-radius: 15px 15px 15px 3px; font-size: 13px; }
+    .dialog { padding: 20px; }
+    .dialog h1 { font-size: 28px; }
+  }
+  @media (max-width: 480px) { #donebtn .long { display: none; } #donebtn .short { display: inline; } .tabs { order: 3; width: 100%; } .tabs button { flex: 1; } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="bar">
+    <div class="brand"><b>Haney Residence</b><span>Design review · Draft 6 with entry portico</span></div>
+    <div class="tabs" role="tablist" aria-label="View">
+      <button role="tab" aria-selected="true" data-view="3d">3D exterior</button>
+      <button role="tab" aria-selected="false" data-view="plan">Floor plan</button>
+    </div>
+    <button class="who" id="who" title="Change your name"><span class="lbl">Commenting as </span><b id="whoname">—</b></button>
+    <button class="btn" id="donebtn"><span class="long">I'm finished</span><span class="short">Done</span></button>
+    <button class="iconbtn" id="helpbtn" aria-label="How to review">?</button>
+  </header>
+  <main>
+    <section class="stage" id="stage">
+      <canvas id="three" aria-label="3D exterior; drag to orbit, click an object to comment on it"></canvas>
+      <svg id="plan" hidden aria-label="Floor plan; drag to pan, scroll to zoom, click a room, wall, door or window"></svg>
+      <div id="pins"></div>
+      <div id="loading">Loading the house…</div>
+      <div class="tip" id="tip" hidden></div>
+      <div class="controls" id="controls3d">
+        <div class="grp" role="group" aria-label="Camera">
+          <button data-cam="front">Front</button><button data-cam="entry">Entry</button><button data-cam="left">Garage side</button>
+          <button data-cam="right">Bedroom side</button><button data-cam="rear">Rear</button><button data-cam="aerial">Aerial</button>
+        </div>
+        <div class="grp"><button id="roofbtn" aria-pressed="true">Roof</button><button id="pinsbtn" aria-pressed="true">Pins</button></div>
+      </div>
+      <div class="controls" id="controlsPlan" hidden>
+        <div class="grp" role="group" aria-label="Zoom"><button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">−</button><button id="zfit">Fit</button></div>
+        <div class="grp"><button id="roofline" aria-pressed="true">Roof outline</button><button id="pinsbtn2" aria-pressed="true">Pins</button></div>
+      </div>
+    </section>
+    <aside class="rail">
+      <div class="railtabs" role="tablist">
+        <button role="tab" aria-selected="true" data-pane="compose">Comment</button>
+        <button role="tab" aria-selected="false" data-pane="all">All comments <span id="count"></span></button>
+        <button role="tab" aria-selected="false" data-pane="find">Find</button>
+      </div>
+      <div class="pane" id="pane-compose"></div>
+      <div class="pane" id="pane-all" hidden></div>
+      <div class="pane" id="pane-find" hidden>
+        <div class="finder"><input id="search" type="search" placeholder="Find a room, window, roof…" aria-label="Find an object"></div>
+        <div class="cats" id="cats"></div>
+        <div class="objs" id="objs"></div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<div class="overlay" id="welcome" hidden>
+  <div class="dialog" role="dialog" aria-labelledby="wtitle">
+    <div class="eyebrow">Kevin &amp; Julie Haney · Builder: Jerry Dodd</div>
+    <h1 id="wtitle">Your house, ready for your notes</h1>
+    <ol>
+      <li><b>Look around.</b> In the 3D exterior, drag to orbit and scroll or pinch to zoom; the buttons at the bottom jump to set views. Switch to <b>Floor plan</b> to see the rooms.</li>
+      <li><b>Click anything</b>: a wall, window, roof, column, room or door. You can also click an open spot on the lawn or plan.</li>
+      <li><b>Write what you think</b> and attach photos of houses or details you like. Each note pins to the spot you clicked.</li>
+      <li><b>Press "I'm finished"</b> when you're done. Everything saves as you go; there's nothing to send.</li>
+    </ol>
+    <label for="nameinput" class="eyebrow">Your name</label>
+    <input id="nameinput" autocomplete="name" placeholder="e.g. Julie" maxlength="40">
+    <div class="row"><button class="btn primary" id="startbtn">Start reviewing</button><span class="status" id="welcomestatus"></span></div>
+  </div>
+</div>
+<div class="overlay" id="finished" hidden>
+  <div class="dialog" role="dialog" aria-labelledby="ftitle">
+    <h1 id="ftitle">Finished reviewing?</h1>
+    <p class="hint" id="fsummary"></p>
+    <div class="row"><button class="btn primary" id="fconfirm">Yes, let Blake know</button><button class="btn" id="fcancel">Keep reviewing</button><span class="status" id="fstatus"></span></div>
+  </div>
+</div>
+<div class="overlay lightbox" id="lightbox" hidden><img id="lbimg" alt="Attached precedent image"></div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ================= feedback store: a private GitHub repo, one JSON file per comment =================
+const STORE = { owner: 'TXRopePusher', repo: 'haney-feedback', branch: 'main' };
+const KEY = 'ce41e7e0d6f1d62bf1becfbdfea4153a', SEALED = 'BAxAWRBVOkAFQjkAVXd9KTB0VTxTJFcGPwAkRmh6SiAxOgxiNW4sYCUGCwE3XEg7Un8lLCwLGiMNHAV1a2QDEjswVwEtWQZkJ3IeYxRkdDoxB1AwVScnITUyJAxo';
+const TOKEN = (() => { const b = atob(SEALED), k = KEY; let s = ''; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b.charCodeAt(i) ^ k.charCodeAt(i % k.length)); return s; })();
+const API = `https://api.github.com/repos/${STORE.owner}/${STORE.repo}/contents/`;
+const H = (extra) => ({ Authorization: 'Bearer ' + TOKEN, 'X-GitHub-Api-Version': '2022-11-28', ...extra });
+const b64 = (bytes) => { let s = ''; const c = 0x8000; for (let i = 0; i < bytes.length; i += c) s += String.fromCharCode.apply(null, bytes.subarray(i, i + c)); return btoa(s); };
+async function putFile(path, bytes, message) {
+  const r = await fetch(API + path, { method: 'PUT', headers: H({ 'Content-Type': 'application/json' }), body: JSON.stringify({ message, content: b64(bytes), branch: STORE.branch }) });
+  if (!r.ok) throw new Error('save failed (' + r.status + ')');
+  return r.json();
+}
+async function listDir(path) {
+  const r = await fetch(API + path + '?ref=' + STORE.branch + '&_=' + Date.now(), { headers: H({ Accept: 'application/vnd.github+json' }), cache: 'no-store' });
+  if (r.status === 404) return []; if (!r.ok) throw new Error('load failed (' + r.status + ')'); return r.json();
+}
+async function getRaw(path, asBlob) {
+  const r = await fetch(API + path + '?ref=' + STORE.branch, { headers: H({ Accept: 'application/vnd.github.raw' }), cache: 'force-cache' });
+  if (!r.ok) throw new Error('load failed (' + r.status + ')'); return asBlob ? r.blob() : r.json();
+}
+const imgCache = new Map();
+async function imageURL(path) { if (!imgCache.has(path)) imgCache.set(path, getRaw(path, true).then(b => URL.createObjectURL(b))); return imgCache.get(path); }
+async function shrink(file) {   // precedent image -> JPEG, longest side 1800 px
+  const bmp = await createImageBitmap(file); const s = Math.min(1, 1800 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * s); c.height = Math.round(bmp.height * s); c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', .84)); return { blob, w: c.width, h: c.height };
+}
+const uid = () => new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14) + '-' + Math.random().toString(36).slice(2, 7);
+const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } };
+
+// ================= model data =================
+const DATA = await (await fetch('data.json')).json();
+const $ = id => document.getElementById(id);
+const stage = $('stage'), canvas = $('three'), svg = $('plan'), tip = $('tip'), pinsEl = $('pins');
+const CAT = { room: 'Rooms', stone: 'Entry portico', column: 'Entry portico', slab: 'Porches', window: 'Windows', door: 'Doors', roof: 'Roofs', wall: 'Exterior walls', int: 'Interior walls', chimney: 'Fireplaces', site: 'Site' };
+const objs = new Map();
+function reg(id, label, info, cat) { const k = String(id); let o = objs.get(k); if (!o) { o = { id: k, label, info, cat }; objs.set(k, o); } return o; }
+for (const e of DATA.elements) { const o = reg(e.id, e.label, e.info, e.cat); o.in3d = true; o.c3 = e.c; }
+const P = DATA.plan;
+const loopsCentroid = loops => { let x = 0, y = 0, n = 0; for (const l of loops) for (let i = 0; i < l.length; i += 2) { x += l[i]; y += l[i + 1]; n++; } return n ? [x / n, y / n] : null; };
+for (const w of P.walls) { const o = reg(w.id, w.label, w.info, w.kind === 'int' ? 'int' : w.kind === 'stone' ? 'stone' : 'wall'); o.inPlan = true; o.cPlan = loopsCentroid(w.loops); }
+for (const d of P.openings) { const o = reg(d.id, d.label, d.info, d.kind); o.inPlan = true; o.cPlan = [d.x, d.y]; }
+for (const r of P.rooms) { const o = reg(r.id, r.label, r.info, 'room'); o.inPlan = true; o.cPlan = [r.x, r.y]; }
+for (const c of P.columns) { const o = reg(c.id, c.label, c.info, c.fire ? 'chimney' : 'column'); o.inPlan = true; o.cPlan = [(c.box[0] + c.box[2]) / 2, (c.box[1] + c.box[3]) / 2]; }
+for (const s of P.slabs) if (!s.house) { const o = reg(s.id, s.label, '', 'slab'); o.inPlan = true; o.cPlan = loopsCentroid(s.loops); }
+objs.set('site', { id: 'site', label: 'Spot on the site', info: 'Yard, drive or landscape', cat: 'site', in3d: true });
+objs.set('plan-note', { id: 'plan-note', label: 'Spot on the plan', info: 'A point on the floor plan', cat: 'site', inPlan: true });
+
+// ================= state =================
+let view = '3d', selected = null, lastPoint = null, openThread = null, comments = [], showPins = true, me = store('haney-name') || '';
+let draftImages = [];   // {blob, w, h, url}
+
+// ================= 3D =================
+const MOBILE = matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 760;
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !MOBILE || devicePixelRatio < 2, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE ? 1.5 : 2)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(40, 1, 1, 3000);
+const controls = new OrbitControls(camera, canvas); controls.enableDamping = true; let needsRender = true; controls.addEventListener('change', () => { needsRender = true; }); controls.maxPolarAngle = Math.PI * 0.495; controls.minDistance = 12; controls.maxDistance = 600;
+const M3 = (x, y, z) => new THREE.Vector3(x, z, -y);
+function rng(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
+function tex(draw, S, rep) { const c = document.createElement('canvas'); c.width = c.height = S; draw(c.getContext('2d'), S); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; if (rep) t.repeat.set(rep, rep); return t; }
+const stoneTex = tex((g, S) => { const r = rng(7), px = S / 48; g.fillStyle = '#d9cdb4'; g.fillRect(0, 0, S, S);
+  const tones = [[240,229,204],[233,219,190],[244,236,215],[228,212,178],[236,224,198],[224,206,170],[246,239,222],[230,216,186]];
+  for (let y = 0; y < 48;) { const h = Math.min([6, 8, 8, 10, 12][Math.floor(r() * 5)], 48 - y); for (let x = -r() * 12; x < 48;) { const w = 12 + r() * 20, t = tones[Math.floor(r() * tones.length)], j = (r() - .5) * 10;
+    g.fillStyle = `rgb(${t[0]+j|0},${t[1]+j|0},${t[2]+j|0})`; const m = .3; g.fillRect((x + m) * px, (y + m) * px, (w - 2 * m) * px, (h - 2 * m) * px); if (x + w > 48) g.fillRect((x - 48 + m) * px, (y + m) * px, (w - 2 * m) * px, (h - 2 * m) * px); x += w; } y += h; } }, 1024);
+const roofTex = tex((g, S) => { const r = rng(11), px = S / 72, e = 5.625; g.fillStyle = '#2c2622'; g.fillRect(0, 0, S, S);
+  for (let row = 0, y = 0; y < 72; row++, y += e) { for (let x = -(row % 2) * 6 - r() * 4; x < 72;) { const w = 6 + r() * 10, v = 40 + r() * 26; g.fillStyle = `rgb(${v+14|0},${v+4|0},${v-6|0})`; g.fillRect(x * px, y * px, w * px - 2, e * px - 2); if (x + w > 72) g.fillRect((x - 72) * px, y * px, w * px - 2, e * px - 2); x += w; } g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(0, (y + e) * px - 3, S, 3); } }, 1024);
+const grassTex = tex((g, S) => { const r = rng(3); g.fillStyle = '#7f915e'; g.fillRect(0, 0, S, S); for (let i = 0; i < 9000; i++) { g.fillStyle = r() > .5 ? 'rgba(95,115,62,.35)' : 'rgba(150,160,105,.3)'; g.fillRect(r() * S, r() * S, 2, 2 + r() * 3); } }, 512, 60);
+const std = (o) => new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, ...o });
+const MAT = {
+  stone: std({ map: stoneTex, roughness: .92 }), roof: std({ map: roofTex, roughness: .85 }), fascia: std({ color: 0xe8dcc2, roughness: .7 }),
+  glass: new THREE.MeshPhysicalMaterial({ color: 0x26343e, roughness: .08, metalness: .2, clearcoat: 1, side: THREE.DoubleSide }),
+  frame: std({ color: 0x1b1b1b, roughness: .5 }), wood: std({ color: 0x3e281b, roughness: .5 }), metal: std({ color: 0x9a9a96, roughness: .4, metalness: .6 }),
+  garage: std({ color: 0xe9e3d3, roughness: .6 }), concrete: std({ color: 0xc4beb2, roughness: .95 }), interior: std({ color: 0xd9d4ca, roughness: .9 }), post: std({ color: 0x7a4e2c, roughness: .7 }) };
+function pick(name, cat) { const n = name.toLowerCase();
+  if (n.includes('stone')) return { m: MAT.stone, uv: 4 }; if (n.includes('shingle')) return { m: MAT.roof, uv: 6 }; if (cat === 'roof') return { m: MAT.fascia };
+  if (n.includes('glass')) return { m: MAT.glass }; if (n.includes('clad')) return { m: MAT.frame }; if (n.includes('cherry') || n.includes('stained')) return { m: MAT.wood };
+  if (n.includes('aluminum')) return { m: MAT.metal }; if (n.includes('ivory') || (n === 'default' && cat === 'door')) return { m: MAT.garage }; if (n.includes('concrete')) return { m: MAT.concrete };
+  if (cat === 'column') return { m: n.includes('lumber') ? MAT.post : MAT.stone, uv: 4 }; if (cat === 'chimney') return { m: MAT.stone, uv: 4 }; return { m: MAT.interior }; }
+function planarUV(pos, tile) { const uv = new Float32Array(pos.length / 3 * 2), a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3(), u = new THREE.Vector3(), v = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), t = new THREE.Vector3();
+  for (let i = 0; i < pos.length; i += 9) { a.fromArray(pos, i); b.fromArray(pos, i + 3); c.fromArray(pos, i + 6); n.subVectors(c, b).cross(t.subVectors(a, b)).normalize();
+    if (Math.abs(n.y) > .98) { u.set(1, 0, 0); v.set(0, 0, 1); } else { u.crossVectors(up, n).normalize(); v.crossVectors(n, u).normalize(); }
+    [a, b, c].forEach((p, k) => { const j = (i / 3 + k) * 2; uv[j] = p.dot(u) / tile; uv[j + 1] = p.dot(v) / tile; }); } return uv; }
+const house = new THREE.Group(); scene.add(house);
+const pickables = [], roofGroup = [];
+for (const e of DATA.elements) {
+  const g = new THREE.Group(); g.userData.id = String(e.id);
+  for (const part of e.parts) {
+    const src = part.p, pos = new Float32Array(src.length);
+    for (let i = 0; i < src.length; i += 3) { pos[i] = src[i] / 100; pos[i + 1] = src[i + 2] / 100; pos[i + 2] = -src[i + 1] / 100; }
+    const ch = pick(DATA.materials[part.m].name, e.cat), geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); if (ch.uv) geo.setAttribute('uv', new THREE.BufferAttribute(planarUV(pos, ch.uv), 2)); geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, ch.m); m.castShadow = ch.m !== MAT.glass; m.receiveShadow = true; m.userData.id = g.userData.id; m.userData.base = ch.m; g.add(m); pickables.push(m);
+  }
+  house.add(g); if (e.cat === 'roof') roofGroup.push(g);
+}
+const box = new THREE.Box3().setFromObject(house), center = box.getCenter(new THREE.Vector3());
+const ground = new THREE.Mesh(new THREE.CircleGeometry(900, 64), new THREE.MeshStandardMaterial({ map: grassTex, roughness: 1 })); ground.rotation.x = -Math.PI / 2; ground.position.y = -.5; ground.receiveShadow = true; ground.userData.id = 'site'; ground.userData.base = ground.material; scene.add(ground);
+const flat = (x0, z0, x1, z1) => { const p = new THREE.Mesh(new THREE.PlaneGeometry(Math.abs(x1 - x0), Math.abs(z1 - z0)), MAT.concrete); p.rotation.x = -Math.PI / 2; p.position.set((x0 + x1) / 2, -.42, (z0 + z1) / 2); p.receiveShadow = true; p.userData.id = 'site'; p.userData.base = MAT.concrete; scene.add(p); return p; };
+const sitePick = [ground, flat(box.min.x - 42, -14, box.min.x + .5, 38), flat(box.min.x - 42, 38, box.min.x - 22, 160), flat(12, 40, 20, 70), flat(box.min.x - 22, 64, 20, 70)];
+{ const trunk = std({ color: 0x5b4632, roughness: 1 }), leaf = std({ color: 0x55703e, roughness: 1, flatShading: true }), r = rng(21);
+  for (const [x, z, s] of [[-30, 110, 1.2], [60, 105, 1], [-95, -60, 1.3], [-75, -95, 1.1], [100, -70, .9], [140, 40, 1.1], [-150, 60, 1]]) {
+    const t = new THREE.Group(); const tr = new THREE.Mesh(new THREE.CylinderGeometry(.7 * s, s, 10 * s, 8), trunk); tr.position.y = 5 * s; t.add(tr);
+    for (let k = 0; k < 4; k++) { const l = new THREE.Mesh(new THREE.IcosahedronGeometry((9 + r() * 4) * s, 1), leaf); l.position.set((r() - .5) * 9 * s, (15 + r() * 6) * s, (r() - .5) * 9 * s); t.add(l); }
+    t.position.set(x, -.5, z); t.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } }); scene.add(t); } }
+scene.add(new THREE.HemisphereLight(0xdfe9f3, 0x6b5e4a, .75));
+const sun = new THREE.DirectionalLight(0xfff1dc, 2.6); sun.castShadow = true; sun.shadow.mapSize.set(MOBILE ? 2048 : 4096, MOBILE ? 2048 : 4096); sun.shadow.bias = -.0004; sun.shadow.normalBias = .6;
+Object.assign(sun.shadow.camera, { left: -150, right: 150, top: 150, bottom: -150, near: 10, far: 700 }); sun.position.set(center.x - 160, 210, center.z + 190); sun.target.position.copy(center); scene.add(sun, sun.target);
+function applySky() { const cs = getComputedStyle(document.documentElement); const c = document.createElement('canvas'); c.width = 2; c.height = 256; const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 256);
+  gr.addColorStop(0, cs.getPropertyValue('--sky-top').trim()); gr.addColorStop(1, cs.getPropertyValue('--sky-bottom').trim()); g.fillStyle = gr; g.fillRect(0, 0, 2, 256);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; needsRender = true; scene.background = t; scene.fog = new THREE.Fog(new THREE.Color(cs.getPropertyValue('--sky-bottom').trim()), 500, 1400); if (svg.firstChild) drawPlan(); }
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applySky);
+const cams = {
+  front: () => [M3(16, -175, 14), M3(16, -20, 10)], entry: () => [M3(36, -85, 7), M3(16, -36, 10)], left: () => [M3(-170, -8, 14), M3(-10, -5, 10)],
+  right: () => [M3(170, 5, 14), M3(20, 0, 10)], rear: () => [M3(10, 165, 16), M3(10, 0, 10)], aerial: () => MOBILE ? [M3(-62, -118, 80), M3(4, -8, 4)] : [M3(-95, -160, 105), M3(0, -5, 4)] };
+let tween = null;
+function goCam(p, t, instant) { if (instant || matchMedia('(prefers-reduced-motion: reduce)').matches) { camera.position.copy(p); controls.target.copy(t); controls.update(); return; } tween = { p0: camera.position.clone(), t0: controls.target.clone(), p, t, s: performance.now() }; }
+document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => { const [p, t] = cams[b.dataset.cam](); goCam(p, t); });
+$('roofbtn').onclick = () => { const on = $('roofbtn').getAttribute('aria-pressed') !== 'true'; $('roofbtn').setAttribute('aria-pressed', String(on)); roofGroup.forEach(g => g.visible = on); needsRender = true; };
+const togglePins = () => { showPins = !showPins; ['pinsbtn', 'pinsbtn2'].forEach(i => $(i).setAttribute('aria-pressed', String(showPins))); drawPins(); };
+$('pinsbtn').onclick = togglePins; $('pinsbtn2').onclick = togglePins;
+const hiCache = new Map();
+function hiMat(base, strong) { const k = base.uuid + strong; if (!hiCache.has(k)) { const m = base.clone(); m.emissive = new THREE.Color(strong ? 0xb36a2a : 0x8a6a3a); m.emissiveIntensity = strong ? .55 : .28; hiCache.set(k, m); } return hiCache.get(k); }
+let hoverId = null;
+function highlight3d() { needsRender = true; for (const m of pickables) { const id = m.userData.id; m.material = selected && id === selected.id ? hiMat(m.userData.base, true) : id === hoverId ? hiMat(m.userData.base, false) : m.userData.base; } }
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function hit3d(clientX, clientY) { const r = canvas.getBoundingClientRect(); ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(ndc, camera);
+  const hits = ray.intersectObjects([...pickables.filter(m => m.parent.visible), ...sitePick], false); if (!hits.length) return null; const h = hits[0]; return { id: h.object.userData.id, point: { x: h.point.x, y: -h.point.z, z: h.point.y } }; }
+function resize() { needsRender = true; const r = stage.getBoundingClientRect(); renderer.setSize(r.width, r.height, false); camera.aspect = r.width / r.height; camera.fov = r.width < 640 ? 55 : 40; camera.updateProjectionMatrix(); if (vb) fitPlan(true); drawPins(); }
+new ResizeObserver(resize).observe(stage);
+let down = null;
+const onDown = e => { down = { x: e.clientX, y: e.clientY }; };
+const isClick = e => down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6;
+canvas.addEventListener('pointerdown', onDown);
+canvas.addEventListener('pointermove', e => { if (e.buttons) { tip.hidden = true; return; } const h = hit3d(e.clientX, e.clientY); const id = h && h.id !== 'site' ? h.id : null; if (id !== hoverId) { hoverId = id; highlight3d(); } showTip(e, id); });
+canvas.addEventListener('pointerleave', () => { hoverId = null; highlight3d(); tip.hidden = true; });
+canvas.addEventListener('pointerup', e => { if (!isClick(e) || e.button !== 0) return; const h = hit3d(e.clientX, e.clientY); if (!h) return; select(h.id, h.point); });
+function showTip(e, id) { const o = id && objs.get(id); if (!o) { tip.hidden = true; return; } const r = stage.getBoundingClientRect(); tip.textContent = o.label; tip.style.left = (e.clientX - r.left) + 'px'; tip.style.top = (e.clientY - r.top) + 'px'; tip.hidden = false; }
+
+// ================= floor plan =================
+const NS = 'http://www.w3.org/2000/svg';
+const pts = l => { let s = ''; for (let i = 0; i < l.length; i += 2) s += (i ? ' ' : '') + l[i].toFixed(2) + ',' + (-l[i + 1]).toFixed(2); return s; };
+const el = (tag, attrs, parent) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (parent) parent.appendChild(n); return n; };
+let vb = null, planBounds = null;
+function planExtent() { let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; const take = l => { for (let i = 0; i < l.length; i += 2) { x0 = Math.min(x0, l[i]); x1 = Math.max(x1, l[i]); y0 = Math.min(y0, -l[i + 1]); y1 = Math.max(y1, -l[i + 1]); } };
+  P.walls.forEach(w => w.loops.forEach(take)); P.roofs.forEach(r => r.loops.forEach(take)); return { x: x0 - 6, y: y0 - 6, w: x1 - x0 + 12, h: y1 - y0 + 12 }; }
+function drawPlan() {
+  const cs = getComputedStyle(document.documentElement), c = n => cs.getPropertyValue(n).trim();
+  svg.textContent = ''; planBounds = planBounds || planExtent();
+  const gSlab = el('g', {}, svg), gRoom = el('g', {}, svg), gRoof = el('g', { id: 'roofs', 'pointer-events': 'none' }, svg), gWall = el('g', {}, svg), gOpen = el('g', {}, svg), gCol = el('g', {}, svg), gLab = el('g', { 'pointer-events': 'none' }, svg);
+  for (const s of P.slabs) { if (s.house) continue; for (const l of s.loops) el('polygon', { points: pts(l), fill: c('--porch'), stroke: c('--roofline'), 'stroke-width': .08, 'data-id': s.id, class: 'pk' }, gSlab); }
+  for (const r of P.rooms) { const d = r.loops.map(l => 'M' + pts(l).split(' ').join('L') + 'Z').join(''); el('path', { d, fill: 'transparent', 'fill-rule': 'evenodd', 'data-id': r.id, class: 'pk room' }, gRoom);
+    const t = el('text', { x: r.x, y: -r.y, 'text-anchor': 'middle', 'font-size': 1.15, 'font-weight': 600, fill: c('--ink'), 'letter-spacing': .05 }, gLab); t.textContent = r.label.toUpperCase();
+    const a = el('text', { x: r.x, y: -r.y + 1.5, 'text-anchor': 'middle', 'font-size': .95, fill: c('--soft') }, gLab); a.textContent = r.area + ' SF'; }
+  for (const r of P.roofs) for (const l of r.loops) el('polygon', { points: pts(l), fill: 'none', stroke: c('--roofline'), 'stroke-width': .1, 'stroke-dasharray': '.8 .5' }, gRoof);
+  gRoof.style.display = $('roofline').getAttribute('aria-pressed') === 'true' ? '' : 'none';
+  for (const w of P.walls) { const d = w.loops.map(l => 'M' + pts(l).split(' ').join('L') + 'Z').join(''); el('path', { d, fill: w.kind === 'int' ? c('--wall-int') : c('--wall-ext'), 'fill-rule': 'evenodd', 'data-id': w.id, class: 'pk wall' }, gWall); }
+  for (const o of P.openings) { const g = el('g', { 'data-id': o.id, class: 'pk' }, gOpen);
+    const hw = Math.max(o.w, 1.5) / 2 + .3, ht = Math.max(o.t, .5) / 2 + .6, ang = Math.atan2(-o.dy, o.dx) * 180 / Math.PI;
+    el('rect', { x: o.x - hw, y: -o.y - ht, width: hw * 2, height: ht * 2, fill: 'transparent', transform: `rotate(${ang} ${o.x} ${-o.y})` }, g);
+    for (const l of o.lines) el('polyline', { points: pts(l), fill: 'none', stroke: c('--ink'), 'stroke-width': .06, 'vector-effect': 'non-scaling-stroke' }, g); }
+  for (const k of P.columns) el('rect', { x: k.box[0], y: -k.box[3], width: k.box[2] - k.box[0], height: k.box[3] - k.box[1], fill: k.fire ? c('--wall-int') : c('--wall-ext'), 'data-id': k.id, class: 'pk' }, gCol);
+  el('g', { id: 'planhi' }, svg);
+  if (!vb) fitPlan(false); else setVB(); highlightPlan();
+}
+function setVB() { svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`); drawPins(); }
+function fitPlan(keep) { if (!planBounds) planBounds = planExtent(); const r = svg.getBoundingClientRect(); if (!r.width) return; const s = Math.max(planBounds.w / r.width, planBounds.h / r.height);
+  if (keep && vb) { const k = vb.w / Math.max(1, vbW || r.width); vb = { x: vb.x, y: vb.y, w: r.width * k, h: r.height * k }; } else vb = { x: planBounds.x + planBounds.w / 2 - r.width * s / 2, y: planBounds.y + planBounds.h / 2 - r.height * s / 2, w: r.width * s, h: r.height * s };
+  vbW = r.width; setVB(); }
+let vbW = 0;
+function zoomAt(f, cx, cy) { const r = svg.getBoundingClientRect(); const mx = vb.x + (cx - r.left) / r.width * vb.w, my = vb.y + (cy - r.top) / r.height * vb.h; vb = { x: mx - (mx - vb.x) * f, y: my - (my - vb.y) * f, w: vb.w * f, h: vb.h * f }; setVB(); }
+function toModel(cx, cy) { const r = svg.getBoundingClientRect(); return { x: vb.x + (cx - r.left) / r.width * vb.w, y: -(vb.y + (cy - r.top) / r.height * vb.h) }; }
+function toScreen(x, y) { const r = svg.getBoundingClientRect(); return { x: r.left + (x - vb.x) / vb.w * r.width, y: r.top + (-y - vb.y) / vb.h * r.height }; }
+svg.addEventListener('wheel', e => { e.preventDefault(); zoomAt(Math.exp(e.deltaY * .0015), e.clientX, e.clientY); }, { passive: false });
+const touches = new Map(); let panFrom = null, pinch = null;
+svg.addEventListener('pointerdown', e => { onDown(e); svg.setPointerCapture(e.pointerId); touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (touches.size === 2) { const [a, b] = [...touches.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) }; panFrom = null; } else panFrom = { x: e.clientX, y: e.clientY, vb: { ...vb } }; });
+svg.addEventListener('pointermove', e => { if (touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pinch && touches.size === 2) { const [a, b] = [...touches.values()], d = Math.hypot(a.x - b.x, a.y - b.y); zoomAt(pinch.d / d, (a.x + b.x) / 2, (a.y + b.y) / 2); pinch.d = d; return; }
+  if (panFrom && e.buttons) { const r = svg.getBoundingClientRect(); svg.classList.add('panning'); vb = { ...panFrom.vb, x: panFrom.vb.x - (e.clientX - panFrom.x) / r.width * vb.w, y: panFrom.vb.y - (e.clientY - panFrom.y) / r.height * vb.h }; setVB(); tip.hidden = true; return; }
+  const t = e.target.closest && e.target.closest('.pk'); const id = t ? t.dataset.id : null; if (id !== hoverId) { hoverId = id; highlightPlan(); } showTip(e, id); });
+svg.addEventListener('pointerup', e => { touches.delete(e.pointerId); if (touches.size < 2) pinch = null; svg.classList.remove('panning'); panFrom = null;
+  if (!isClick(e) || e.button !== 0) return; const under = document.elementFromPoint(e.clientX, e.clientY); const t = under && under.closest && under.closest('#plan .pk'); select(t ? t.dataset.id : 'plan-note', toModel(e.clientX, e.clientY)); });
+svg.addEventListener('pointerleave', () => { hoverId = null; highlightPlan(); tip.hidden = true; });
+$('zin').onclick = () => { const r = svg.getBoundingClientRect(); zoomAt(.75, r.left + r.width / 2, r.top + r.height / 2); };
+$('zout').onclick = () => { const r = svg.getBoundingClientRect(); zoomAt(1.33, r.left + r.width / 2, r.top + r.height / 2); };
+$('zfit').onclick = () => fitPlan(false);
+$('roofline').onclick = () => { const on = $('roofline').getAttribute('aria-pressed') !== 'true'; $('roofline').setAttribute('aria-pressed', String(on)); const g = $('roofs'); if (g) g.style.display = on ? '' : 'none'; };
+function highlightPlan() { if (!svg.firstChild) return; const cs = getComputedStyle(document.documentElement), acc = cs.getPropertyValue('--accent').trim();
+  svg.querySelectorAll('.pk').forEach(n => { const id = n.dataset.id, on = selected && id === selected.id, hv = id === hoverId;
+    if (n.classList.contains('room')) n.setAttribute('fill', on ? cs.getPropertyValue('--room-sel') : hv ? cs.getPropertyValue('--room-hi') : 'transparent'); else n.style.opacity = hv && !on ? .65 : ''; });
+  const hi = $('planhi'); hi.textContent = ''; const t = selected && svg.querySelector(`.pk[data-id="${selected.id}"]:not(.room)`);
+  if (t) { const b = t.getBBox(); el('rect', { x: b.x - .5, y: b.y - .5, width: b.width + 1, height: b.height + 1, fill: 'none', stroke: acc, 'stroke-width': .25, rx: .3, 'pointer-events': 'none' }, hi); } }
+
+// ================= views =================
+function setView(v) { view = v; document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.view === v)));
+  canvas.hidden = v !== '3d'; svg.toggleAttribute('hidden', v !== 'plan'); $('controls3d').hidden = v !== '3d'; $('controlsPlan').hidden = v !== 'plan'; tip.hidden = true;
+  if (v === 'plan') { if (!svg.firstChild) drawPlan(); else fitPlan(true); } else resize(); drawPins(); }
+document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => setView(b.dataset.view));
+function frame(o, pt) {
+  if (!o) return;
+  if (view === '3d' && !o.in3d && (o.inPlan || (pt && pt.z === undefined))) setView('plan'); else if (view === 'plan' && !o.inPlan && o.in3d) setView('3d');
+  if (view === '3d') { const c = pt && pt.z !== undefined ? [pt.x, pt.y, pt.z] : o.c3; if (!c) return; const t = M3(c[0], c[1], c[2]); const dir = camera.position.clone().sub(controls.target).normalize(); goCam(t.clone().add(dir.multiplyScalar(o.cat === 'roof' ? 70 : 42)), t); }
+  else { const c = pt ? [pt.x, pt.y] : o.cPlan; if (!c) return; const w = Math.min(vb.w, 60), h = w * vb.h / vb.w; vb = { x: c[0] - w / 2, y: -c[1] - h / 2, w, h }; setVB(); }
+}
+
+// ================= pins =================
+function screenOf(c) {   // c: comment record -> client px in the current view, or null
+  const o = objs.get(c.objId), p = c.point;
+  if (view === '3d') {
+    let v = null; if (p && p.z !== undefined && p.z !== null) v = M3(p.x, p.y, p.z); else if (o && o.c3) v = M3(o.c3[0], o.c3[1], o.c3[2]);
+    if (!v) return null; const q = v.clone().project(camera); if (q.z > 1 || Math.abs(q.x) > 1.02 || Math.abs(q.y) > 1.02) return null;
+    const r = canvas.getBoundingClientRect(); return { x: (q.x + 1) / 2 * r.width, y: (1 - q.y) / 2 * r.height };
+  }
+  if (!vb) return null; let x, y; if (o && o.cPlan && !(c.objId === 'plan-note')) [x, y] = (p && (c.view === 'plan')) ? [p.x, p.y] : o.cPlan; else if (p) { x = p.x; y = p.y; } else return null;
+  const s = toScreen(x, y), r = svg.getBoundingClientRect(); if (s.x < r.left || s.x > r.right || s.y < r.top || s.y > r.bottom) return null; return { x: s.x - r.left, y: s.y - r.top };
+}
+const threads = () => comments.filter(c => !c.replyTo);
+function drawPins() {
+  pinsEl.textContent = ''; if (!showPins) return;
+  threads().forEach((c, i) => { const s = screenOf(c); if (!s) return; const b = document.createElement('button'); b.className = 'pin' + (openThread === c.id ? ' open' : ''); b.style.left = s.x + 'px'; b.style.top = s.y + 'px';
+    b.textContent = String(i + 1); b.title = c.author + ': ' + c.label; b.onclick = () => openThreadById(c.id, true); pinsEl.appendChild(b); });
+  if (selected && !openThread) { const s = screenOf({ objId: selected.id, point: lastPoint, view }); if (s) { const b = document.createElement('div'); b.className = 'pin draft'; b.style.left = s.x + 'px'; b.style.top = s.y + 'px'; b.textContent = '+'; pinsEl.appendChild(b); } }
+}
+
+// ================= rail: compose / thread =================
+const fmtTime = iso => { const d = new Date(iso); return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); };
+const h = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
+function sheet(tall) { document.querySelector('main').classList.toggle('sheet-tall', !!tall); }
+function select(id, point) {
+  selected = id ? objs.get(String(id)) || null : null; lastPoint = point || null; openThread = null;
+  highlight3d(); highlightPlan(); showPane('compose'); renderCompose(); drawPins(); sheet(!!selected);
+}
+function composer(onPost, placeholder) {
+  const wrap = h('div', 'thread'); const ta = h('textarea'); ta.addEventListener('focus', () => sheet(true)); ta.placeholder = placeholder; ta.maxLength = 4000; ta.id = 'ta-' + Math.random().toString(36).slice(2, 7);
+  const drop = h('div', 'drop'); const thumbs = h('div', 'thumbs'); const row = h('div', 'row');
+  const file = h('input'); file.type = 'file'; file.accept = 'image/*'; file.multiple = true; file.hidden = true; file.id = 'file-' + ta.id;
+  const attach = h('button', 'btn', 'Attach photos'); attach.type = 'button'; attach.onclick = () => file.click();
+  row.append(attach, h('span', 'status', 'or drop / paste images'));
+  drop.append(row, thumbs, file);
+  const renderThumbs = () => { thumbs.textContent = ''; draftImages.forEach((im, i) => { const t = h('div', 'thumb'); const img = h('img'); img.src = im.url; img.alt = 'Attached image ' + (i + 1); img.onclick = () => lightbox(im.url);
+    const x = h('button', '', '×'); x.setAttribute('aria-label', 'Remove image'); x.onclick = () => { URL.revokeObjectURL(im.url); draftImages.splice(i, 1); renderThumbs(); }; t.append(img, x); thumbs.appendChild(t); }); };
+  const addFiles = async files => { for (const f of files) { if (!f.type.startsWith('image/') || draftImages.length >= 8) continue; try { const s = await shrink(f); draftImages.push({ ...s, url: URL.createObjectURL(s.blob) }); } catch {} } renderThumbs(); };
+  file.onchange = () => addFiles(file.files);
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); }); drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); addFiles(e.dataTransfer.files); });
+  ta.addEventListener('paste', e => { const fs = [...(e.clipboardData?.files || [])]; if (fs.length) { e.preventDefault(); addFiles(fs); } });
+  const actions = h('div', 'row'); const post = h('button', 'btn primary', 'Post comment'); const st = h('span', 'status');
+  post.onclick = async () => { const text = ta.value.trim(); if (!text && !draftImages.length) { st.textContent = 'Write a note or attach a photo first.'; return; }
+    post.disabled = true; st.className = 'status'; st.textContent = draftImages.length ? 'Uploading photos…' : 'Saving…';
+    const imgs = draftImages; draftImages = [];
+    try { await onPost(text, imgs); ta.value = ''; imgs.forEach(im => URL.revokeObjectURL(im.url)); renderThumbs(); st.textContent = 'Saved'; }
+    catch (err) { draftImages = imgs; renderThumbs(); st.className = 'status err'; st.textContent = 'Not saved. Check your connection and press Post again.'; }
+    finally { post.disabled = false; } };
+  actions.append(post, st); wrap.append(ta, drop, actions); renderThumbs(); return wrap;
+}
+async function saveComment(base, text, imgs) {
+  const id = uid(), images = [];
+  for (let i = 0; i < imgs.length; i++) { const im = imgs[i], path = `images/${id}-${i + 1}.jpg`; await putFile(path, new Uint8Array(await im.blob.arrayBuffer()), `Image for ${id}`); images.push({ path, w: im.w, h: im.h }); }
+  const rec = { v: 1, id, author: me || 'Guest', text, created: new Date().toISOString(), images, ...base };
+  await putFile(`comments/${id}.json`, new TextEncoder().encode(JSON.stringify(rec, null, 2)), `Comment by ${rec.author} on ${rec.label}`);
+  comments.push(rec); comments.sort((a, b) => a.created.localeCompare(b.created)); renderAll(); return rec;
+}
+function renderCompose() {
+  const pane = $('pane-compose'); pane.textContent = '';
+  if (openThread) return renderThread(pane);
+  if (!selected) {
+    pane.append(h('div', 'eyebrow', 'Nothing selected'), h('h2', '', 'Click anything in the house'),
+      h('p', 'hint', 'Pick a wall, window, roof, column, door or room, or an open spot on the lawn or plan. Then write your note here and attach photos of things you like.'));
+    const recent = threads().slice(-3).reverse(); if (recent.length) { pane.append(h('div', 'eyebrow', 'Latest comments')); const l = h('div', 'list'); recent.forEach(c => l.appendChild(threadItem(c))); pane.append(l); }
+    return;
+  }
+  const others = threads().filter(c => c.objId === selected.id && selected.id !== 'site' && selected.id !== 'plan-note');
+  pane.append(h('div', 'eyebrow', CAT[selected.cat] || 'Object'), h('h2', '', selected.label));
+  if (selected.info) pane.append(h('div', 'info', selected.info));
+  const zoom = h('button', 'btn', 'Zoom to it'); zoom.onclick = () => frame(selected, lastPoint); const zrow = h('div', 'row'); zrow.append(zoom); pane.append(zrow);
+  pane.append(composer((text, imgs) => saveComment({ objId: selected.id, label: selected.label, cat: selected.cat, view, point: lastPoint }, text, imgs).then(rec => openThreadById(rec.id)), 'What do you think about this? Anything you would change?'));
+  if (others.length) { pane.append(h('div', 'eyebrow', 'Already said about this')); const l = h('div', 'list'); others.forEach(c => l.appendChild(threadItem(c))); pane.append(l); }
+}
+async function renderImages(box, images) { for (const im of images || []) { const t = h('div', 'thumb'); const img = h('img'); img.alt = 'Precedent image'; t.appendChild(img); box.appendChild(t); imageURL(im.path).then(u => { img.src = u; img.onclick = () => lightbox(u); }).catch(() => { t.textContent = '×'; }); } }
+function msg(c, isReply) { const m = h('div', 'msg' + (isReply ? ' reply' : '')); const meta = h('div', 'meta'); const who = h('span'); who.append(h('b', '', c.author)); meta.append(who, h('span', '', fmtTime(c.created)));
+  m.append(meta); if (c.text) m.append(h('p', '', c.text)); if (c.images && c.images.length) { const tb = h('div', 'thumbs'); m.append(tb); renderImages(tb, c.images); } return m; }
+function renderThread(pane) {
+  const c = comments.find(x => x.id === openThread); if (!c) { openThread = null; return renderCompose(); }
+  const idx = threads().indexOf(c) + 1;
+  const head = h('div', 'eyebrow'); head.append(h('span', 'num', String(idx)), document.createTextNode(CAT[c.cat] || 'Comment')); pane.append(head, h('h2', '', c.label));
+  const row = h('div', 'row'); const zoom = h('button', 'btn', 'Show me'); zoom.onclick = () => frame(objs.get(c.objId) || { cat: c.cat, in3d: c.point && c.point.z !== undefined, inPlan: true }, c.point);
+  const back = h('button', 'btn', 'New comment here'); back.onclick = () => { openThread = null; selected = objs.get(c.objId) || selected; lastPoint = c.point; highlight3d(); highlightPlan(); renderCompose(); drawPins(); };
+  row.append(zoom, back); pane.append(row);
+  const t = h('div', 'thread'); t.append(msg(c, false)); comments.filter(r => r.replyTo === c.id).forEach(r => t.append(msg(r, true))); pane.append(t);
+  pane.append(h('div', 'eyebrow', 'Reply'), composer((text, imgs) => saveComment({ replyTo: c.id, objId: c.objId, label: c.label, cat: c.cat, view: c.view, point: c.point }, text, imgs).then(() => renderCompose()), 'Add to this…'));
+}
+function openThreadById(id, frameIt) { openThread = id; const c = comments.find(x => x.id === id); if (c) { selected = objs.get(c.objId) || null; lastPoint = c.point; if (frameIt) frame(selected || { cat: c.cat, in3d: !!(c.point && c.point.z !== undefined), inPlan: true }, c.point); }
+  highlight3d(); highlightPlan(); showPane('compose'); renderCompose(); drawPins(); }
+function threadItem(c) { const b = h('button', 'citem' + (openThread === c.id ? ' active' : '')); const top = h('div', 'top'); const lab = h('span'); lab.append(h('span', 'num', String(threads().indexOf(c) + 1)), h('b', '', c.author));
+  top.append(lab, h('span', '', fmtTime(c.created))); const replies = comments.filter(r => r.replyTo === c.id).length; const pics = (c.images || []).length;
+  b.append(top, h('div', 'lab', c.label), h('div', 'snip', (c.text || '(photo)') + (pics ? `  · ${pics} photo${pics > 1 ? 's' : ''}` : '') + (replies ? `  · ${replies} repl${replies > 1 ? 'ies' : 'y'}` : '')));
+  b.onclick = () => openThreadById(c.id, true); return b; }
+function renderAll() {
+  const pane = $('pane-all'); pane.textContent = ''; const ts = threads(); $('count').textContent = ts.length ? '(' + ts.length + ')' : '';
+  if (!ts.length) { pane.append(h('h2', '', 'No comments yet'), h('p', 'hint', 'Click anything in the house to leave the first one.')); }
+  else { const l = h('div', 'list'); [...ts].reverse().forEach(c => l.appendChild(threadItem(c))); pane.append(l); }
+  drawPins(); if (openThread || !selected) renderCompose();
+}
+function showPane(p) { document.querySelectorAll('[data-pane]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.pane === p))); ['compose', 'all', 'find'].forEach(x => $('pane-' + x).hidden = x !== p); }
+document.querySelectorAll('[data-pane]').forEach(b => b.onclick = () => showPane(b.dataset.pane));
+function lightbox(url) { $('lbimg').src = url; $('lightbox').hidden = false; }
+$('lightbox').onclick = () => $('lightbox').hidden = true;
+addEventListener('keydown', e => { if (e.key === 'Escape') { $('lightbox').hidden = true; $('finished').hidden = true; } });
+
+// ================= find =================
+const order = ['room', 'stone', 'column', 'slab', 'window', 'door', 'roof', 'wall', 'int', 'chimney'];
+let catFilter = null;
+{ const box = $('cats'); for (const g of ['All', ...new Set(order.map(c => CAT[c]))]) { const b = h('button', '', g); b.setAttribute('aria-pressed', String(g === 'All')); b.onclick = () => { catFilter = g === 'All' ? null : g; box.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); buildFind(); }; box.appendChild(b); } }
+function buildFind() {
+  const q = $('search').value.trim().toLowerCase(), box = $('objs'); box.textContent = ''; const groups = new Map();
+  for (const o of objs.values()) { if (o.cat === 'site') continue; const g = CAT[o.cat] || 'Other'; if (catFilter && g !== catFilter) continue; if (q && !(o.label + ' ' + (o.info || '')).toLowerCase().includes(q)) continue; if (!groups.has(g)) groups.set(g, []); groups.get(g).push(o); }
+  for (const g of new Set(order.map(c => CAT[c]))) { const items = groups.get(g); if (!items) continue; box.append(h('h3', '', g + ' · ' + items.length));
+    items.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+    for (const o of items) { const b = h('button', 'obj'); b.append(h('span', '', o.label), h('small', '', o.info ? o.info.split(',')[0] : '')); b.onclick = () => { select(o.id); frame(o); }; box.appendChild(b); } }
+}
+$('search').addEventListener('input', buildFind);
+
+// ================= reviewer, finish, sync =================
+function setName(n) { me = n.trim().slice(0, 40); store('haney-name', me); $('whoname').textContent = me || '—'; }
+$('who').onclick = () => { $('nameinput').value = me; $('welcome').hidden = false; $('nameinput').focus(); };
+$('helpbtn').onclick = () => { $('nameinput').value = me; $('welcome').hidden = false; };
+$('startbtn').onclick = () => { const n = $('nameinput').value.trim(); if (!n) { $('welcomestatus').textContent = 'Please add your name so Blake knows who wrote what.'; $('nameinput').focus(); return; } setName(n); $('welcome').hidden = true; };
+$('nameinput').addEventListener('keydown', e => { if (e.key === 'Enter') $('startbtn').click(); });
+$('donebtn').onclick = () => { const mine = comments.filter(c => c.author === me).length; $('fsummary').textContent = mine ? `You left ${mine} comment${mine > 1 ? 's' : ''}. Everything is already saved.` : 'You haven’t left any comments yet. You can still let Blake know you looked it over.'; $('fstatus').textContent = ''; $('finished').hidden = false; };
+$('fcancel').onclick = () => $('finished').hidden = true;
+$('fconfirm').onclick = async () => { $('fconfirm').disabled = true; $('fstatus').className = 'status'; $('fstatus').textContent = 'Sending…';
+  try { const id = uid(); await putFile(`status/${id}-done.json`, new TextEncoder().encode(JSON.stringify({ author: me, finished: new Date().toISOString(), comments: comments.filter(c => c.author === me).length })), `${me} finished reviewing`);
+    $('fstatus').textContent = 'Thank you! Blake will take it from here.'; setTimeout(() => $('finished').hidden = true, 1800); }
+  catch { $('fstatus').className = 'status err'; $('fstatus').textContent = 'That didn’t go through. Check your connection and try again.'; }
+  finally { $('fconfirm').disabled = false; } };
+let syncing = false;
+async function sync() { if (syncing || document.hidden) return; syncing = true;
+  try { const files = (await listDir('comments')).filter(f => f.name.endsWith('.json')); const known = new Set(comments.map(c => c.id + '.json')); const fresh = files.filter(f => !known.has(f.name));
+    const recs = await Promise.all(fresh.map(f => getRaw('comments/' + f.name).catch(() => null))); let added = false;
+    for (const r of recs) if (r && r.id && !comments.some(c => c.id === r.id)) { comments.push(r); added = true; }
+    if (added) { comments.sort((a, b) => a.created.localeCompare(b.created)); renderAll(); } }
+  catch {} finally { syncing = false; } }
+
+// ================= loop & start =================
+let lastSig = '';
+renderer.setAnimationLoop(now => {
+  if (view !== '3d') return;
+  if (tween) { const k = Math.min(1, (now - tween.s) / 1000), e = k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; camera.position.lerpVectors(tween.p0, tween.p, e); controls.target.lerpVectors(tween.t0, tween.t, e); if (k === 1) tween = null; needsRender = true; }
+  if (controls.update()) needsRender = true;
+  if (!needsRender) return; needsRender = false; renderer.render(scene, camera);
+  const sig = camera.position.toArray().map(v => v.toFixed(2)).join() + controls.target.toArray().map(v => v.toFixed(2)).join(); if (sig !== lastSig) { lastSig = sig; drawPins(); }
+});
+applySky(); resize(); { const [p, t] = cams.aerial(); goCam(p, t, true); }
+buildFind(); renderCompose(); renderAll(); setName(me);
+$('loading').hidden = true;
+if (!me) $('welcome').hidden = false;
+sync(); setInterval(sync, 40000); document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
+</script>
+</body>
+</html>
