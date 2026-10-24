@@ -166,7 +166,7 @@
       <div class="controls" id="controls3d">
         <div class="grp" role="group" aria-label="Camera">
           <button data-cam="front">Front</button><button data-cam="entry">Entry</button><button data-cam="left">Garage side</button>
-          <button data-cam="right">Bedroom side</button><button data-cam="rear">Rear</button><button data-cam="aerial">Aerial</button>
+          <button data-cam="right">Bedroom side</button><button data-cam="rear">Rear</button><button data-cam="aerial">Aerial</button><button data-cam="site">Site</button>
         </div>
         <div class="grp"><button id="roofbtn" aria-pressed="true">Roof</button><button id="pinsbtn" aria-pressed="true">Pins</button></div>
       </div>
@@ -230,7 +230,7 @@ import { Sky } from 'three/addons/objects/Sky.js';
 
 // ================= feedback store: a private GitHub repo, one JSON file per comment =================
 const STORE = { owner: 'TXRopePusher', repo: 'haney-feedback', branch: 'main' };
-const KEY = '4cb9b602ce15750db9e11beb33c398ca', SEALED = 'UwoWURdUb0ICEW4EBnR/LzR8UmgBIFAAalYmQWB3GiBmPFpqMm95YiJVXAVkX0o9VncieH4PHSVYSgdyY2lTEmw2AQkqWFNmICFJZ0dndjw1D1dkByMgJ2BkJgtg';
+const KEY = '09e074408950d973876d04a0f4c65044', SEALED = 'V1ARWEJWa0BZTWoBVXh4eG5yAT0AdlRSP1EmRGx/TXViZl1jZ219YHkJWAA3U01qDHlxLX9ZGXcNTQd3b2EER2hsBgB/Wldke31NYhRrcWtvAQQxBnUkdTVjJg5s';
 const TOKEN = (() => { const b = atob(SEALED), k = KEY; let s = ''; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b.charCodeAt(i) ^ k.charCodeAt(i % k.length)); return s; })();
 const API = `https://api.github.com/repos/${STORE.owner}/${STORE.repo}/contents/`;
 const H = (extra) => ({ Authorization: 'Bearer ' + TOKEN, 'X-GitHub-Api-Version': '2022-11-28', ...extra });
@@ -259,7 +259,10 @@ const uid = () => new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14) 
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } };
 
 // ================= model data =================
-const DATA = await (await fetch('data.json')).json();
+const BUILD = '20261024171306';   // stamped by publish.py so phones and browsers never mix cached files from different builds
+const DATA = await (await fetch('data.json?b=' + BUILD)).json();
+// real site: USGS 3DEP lidar terrain, USDA NAIP imagery, existing structures and trees (built by geo_build.py)
+const SITE = await fetch('site.json?b=' + BUILD).then(r => r.ok ? r.json() : null).catch(() => null);
 const $ = id => document.getElementById(id);
 const stage = $('stage'), canvas = $('three'), svg = $('plan'), tip = $('tip'), pinsEl = $('pins');
 const CAT = { room: 'Rooms', stone: 'Entry portico', column: 'Entry portico', slab: 'Porches', window: 'Windows', door: 'Doors', roof: 'Roofs', wall: 'Exterior walls', int: 'Interior walls', chimney: 'Fireplaces', site: 'Site' };
@@ -287,15 +290,15 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE ? 1.75 : 2.5));
 // phones can drop the WebGL context under memory pressure, which freezes the view; reload the scene when that happens
 canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); $('loading').textContent = 'Reloading the 3D view…'; $('loading').hidden = false; setTimeout(() => location.reload(), 600); }); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
-const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(40, 1, 1, 6000);
-const controls = new OrbitControls(camera, canvas); controls.enableDamping = true; let needsRender = true; controls.addEventListener('change', () => { needsRender = true; }); controls.maxPolarAngle = Math.PI * 0.495; controls.minDistance = 12; controls.maxDistance = 600;
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(40, 1, 1, 14000);
+const controls = new OrbitControls(camera, canvas); controls.enableDamping = true; let needsRender = true; controls.addEventListener('change', () => { needsRender = true; }); controls.maxPolarAngle = Math.PI * 0.495; controls.minDistance = 12; controls.maxDistance = 1500;
 const M3 = (x, y, z) => new THREE.Vector3(x, z, -y);
 function rng(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
 const loader = new THREE.TextureLoader(), ANISO = Math.min(MOBILE ? 4 : 16, renderer.capabilities.getMaxAnisotropy());
 // scanned CC0 texture sets in tex/: <key>_<col|nor|rgh>_<size>.jpg; phones get 1k, others 2k where available
 function maps(key, hi) { const sz = hi && !MOBILE ? 2048 : 1024, o = {};
   for (const [k, slot] of [['col', 'map'], ['nor', 'normalMap'], ['rgh', 'roughnessMap']]) {
-    const t = loader.load(`tex/${key}_${k}_${sz}.jpg`, () => { needsRender = true; });
+    const t = loader.load(`tex/${key}_${k}_${sz}.jpg?b=${BUILD}`, () => { needsRender = true; });
     t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = ANISO; if (k === 'col') t.colorSpace = THREE.SRGBColorSpace; o[slot] = t; }
   return o; }
 const std = (o) => new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, ...o });
@@ -306,7 +309,7 @@ const MAT = {
   fascia: std({ color: 0xebe2cd, roughness: .55 }),
   glass: new THREE.MeshPhysicalMaterial({ color: 0x24333d, roughness: .04, metalness: .05, clearcoat: 1, clearcoatRoughness: .02, envMapIntensity: 3.2, side: THREE.DoubleSide }),
   frame: std({ color: 0x1c1c1c, roughness: .4, metalness: .2 }), wood: std({ color: 0x4f2e1b, roughness: .42 }), metal: std({ color: 0x8c8c88, roughness: .32, metalness: .75 }),
-  garage: std({ color: 0xece6d6, roughness: .42, metalness: .15 }), cedar: std({ ...maps('cedar', false), normalScale: V2(.5) }),   // stained cedar carriage doors concrete: std({ ...maps('conc', false), normalScale: V2(.6) }),
+  garage: std({ color: 0xece6d6, roughness: .42, metalness: .15 }), cedar: std({ ...maps('cedar', false), normalScale: V2(.5) }),   /* stained cedar carriage doors */ concrete: std({ ...maps('conc', false), normalScale: V2(.6), color: 0xc4c2bc, roughnessMap: null, roughness: .93 }),   /* broom finish: matte */
   interior: std({ color: 0xd9d4ca, roughness: .9 }), post: std({ color: 0x7a4e2c, roughness: .7 }) };
 function pick(name, cat) { const n = name.toLowerCase();
   if (n.includes('stone')) return { m: MAT.stone, uv: 4.4 }; if (n.includes('shingle')) return { m: MAT.roof, uv: 6.6 }; if (cat === 'roof') return { m: MAT.fascia };
@@ -347,12 +350,46 @@ grassMat.onBeforeCompile = sh => { sh.uniforms.macro = { value: macro };   // br
     texelColor.rgb = mix( vec3( dot( texelColor.rgb, vec3( .3, .59, .11 ) ) ), texelColor.rgb, .62 );
     texelColor.rgb *= mix( vec3( 1.2, 1.2, 1.0 ), vec3( 1.95, 1.6, .9 ), dry ) * ( .75 + .5 * m2 );
     diffuseColor *= texelColor;`); };
-const ground = new THREE.Mesh(new THREE.CircleGeometry(1500, 96), grassMat); ground.rotation.x = -Math.PI / 2; ground.position.y = -.5; ground.receiveShadow = true; ground.userData.id = 'site'; ground.userData.base = ground.material; scene.add(ground);
-const flat = (x0, z0, x1, z1) => { const w = Math.abs(x1 - x0), d = Math.abs(z1 - z0), geo = new THREE.PlaneGeometry(w, d), uv = geo.attributes.uv;
-  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w / 6.56, uv.getY(i) * d / 6.56);
-  const p = new THREE.Mesh(geo, MAT.concrete); p.rotation.x = -Math.PI / 2; p.position.set((x0 + x1) / 2, -.42, (z0 + z1) / 2); p.receiveShadow = true; p.userData.id = 'site'; p.userData.base = MAT.concrete; scene.add(p); return p; };
-const sitePick = [ground, flat(box.min.x - 42, -14, box.min.x + .5, 38), flat(box.min.x - 42, 38, box.min.x - 22, 160), flat(12, 40, 20, 70), flat(box.min.x - 22, 64, 20, 70)];
-// trees: live-oak style canopies built from alpha-cut leaf-cluster cards facing outward, so light and shadow read like foliage
+const sitePick = [];
+const dec = b => new Int16Array(Uint8Array.from(atob(b), c => c.charCodeAt(0)).buffer);
+const [SOX, SOY] = SITE.origin, TIN = SITE.inner, TOUT = SITE.outer, hIn = dec(TIN.h), hOut = dec(TOUT.h);
+// site frame (ft from the imagery centre, x east, y north) <-> model frame: the house front (model -Y) faces east
+const s2m = (sx, sy) => [sy - SOY, SOX - sx], m2s = (mx, my) => [SOX - my, SOY + mx];
+function gridH(t, h, sx, sy) { const n = t.n, w = t.size, c = (sx + w / 2) / w * (n - 1), r = (w / 2 - sy) / w * (n - 1);
+  if (c < 0 || r < 0 || c > n - 1 || r > n - 1) return null;
+  const c0 = Math.min(n - 2, Math.floor(c)), r0 = Math.min(n - 2, Math.floor(r)), fc = c - c0, fr = r - r0, g = (i, j) => h[i * n + j] / 10;
+  return g(r0, c0) * (1 - fc) * (1 - fr) + g(r0, c0 + 1) * fc * (1 - fr) + g(r0 + 1, c0) * (1 - fc) * fr + g(r0 + 1, c0 + 1) * fc * fr; }
+const groundAt = (mx, my) => { const [sx, sy] = m2s(mx, my); return gridH(TIN, hIn, sx, sy) ?? gridH(TOUT, hOut, sx, sy) ?? 0; };
+function terrain(t, h, mat, drop, holeHalf) {
+  const n = t.n, g = new THREE.PlaneGeometry(t.size, t.size, n - 1, n - 1); g.rotateX(-Math.PI / 2);
+  const p = g.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, h[i] / 10 - drop);
+  if (holeHalf) { const idx = g.index.array, keep = [];
+    for (let k = 0; k < idx.length; k += 3) { let inside = true; for (let j = 0; j < 3; j++) { const v = idx[k + j]; if (Math.abs(p.getX(v)) > holeHalf || Math.abs(p.getZ(v)) > holeHalf) inside = false; } if (!inside) keep.push(idx[k], idx[k + 1], idx[k + 2]); }
+    g.setIndex(keep); }
+  g.computeVertexNormals();
+  const m = new THREE.Mesh(g, mat); m.rotation.y = -Math.PI / 2; m.position.set(-SOY, 0, -SOX); m.receiveShadow = true; return m; }
+const drapeTex = loader.load((MOBILE ? 'tex/site_inner_1k.jpg' : 'tex/site_inner.jpg') + '?b=' + BUILD, () => { needsRender = true; }); drapeTex.colorSpace = THREE.SRGBColorSpace; drapeTex.anisotropy = ANISO;
+const outerTex = loader.load('tex/site_outer.jpg?b=' + BUILD, () => { needsRender = true; }); outerTex.colorSpace = THREE.SRGBColorSpace; outerTex.anisotropy = ANISO;
+const lawnCol = loader.load('tex/grass_col_1024.jpg?b=' + BUILD, () => { needsRender = true; }), lawnNor = loader.load('tex/grass_nor_1024.jpg?b=' + BUILD, () => { needsRender = true; });
+for (const t of [lawnCol, lawnNor]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = ANISO; } lawnCol.colorSpace = THREE.SRGBColorSpace; lawnNor.repeat.set(TIN.size / 4.6, TIN.size / 4.6);
+const groundMat = new THREE.MeshStandardMaterial({ map: drapeTex, normalMap: lawnNor, normalScale: V2(.55), roughness: 1 });
+groundMat.onBeforeCompile = sh => { sh.uniforms.detail = { value: lawnCol }; sh.uniforms.drep = { value: TIN.size / 4.6 };   // scanned turf detail under the aerial colour, for close-up views
+  sh.fragmentShader = 'uniform sampler2D detail; uniform float drep;\n' + sh.fragmentShader.replace('#include <map_fragment>', `
+    vec4 texelColor = texture2D( map, vMapUv );
+    float dl = dot( texture2D( detail, vMapUv * drep ).rgb, vec3( .3333 ) );
+    texelColor.rgb *= clamp( mix( 1.0, dl / .062, .5 ), .55, 1.6 );
+    diffuseColor *= texelColor;`); };
+const ground = terrain(TIN, hIn, groundMat, 0, 0); ground.userData.id = 'site'; ground.userData.base = groundMat; scene.add(ground); sitePick.push(ground);
+const outerMat = new THREE.MeshStandardMaterial({ map: outerTex, roughness: 1, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 });
+scene.add(terrain(TOUT, hOut, outerMat, 2, TIN.size / 2 - 2 * TOUT.size / (TOUT.n - 1)));
+{ const far = new THREE.Mesh(new THREE.CircleGeometry(14000, 64), new THREE.MeshStandardMaterial({ color: 0x55613f, roughness: 1 })); far.rotation.x = -Math.PI / 2; far.position.y = hOut.reduce((m, v) => Math.min(m, v), 1e9) / 10 - 30; scene.add(far); }
+// drives and walks, draped on the terrain
+for (const [x0, y0, x1, y1, kind] of SITE.drives) {
+  const w = x1 - x0, d = y1 - y0, g = new THREE.PlaneGeometry(w, d, Math.max(1, Math.ceil(w / 4)), Math.max(1, Math.ceil(d / 4))); g.rotateX(-Math.PI / 2);
+  const p = g.attributes.position, uv = g.attributes.uv, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  for (let i = 0; i < p.count; i++) { const mx = cx + p.getX(i), my = cy - p.getZ(i); p.setY(i, groundAt(mx, my) + .12); uv.setXY(i, mx / 6.56, my / 6.56); }
+  g.computeVertexNormals(); const m = new THREE.Mesh(g, MAT.concrete); m.position.set(cx, 0, -cy); m.receiveShadow = true; m.userData.id = 'site'; m.userData.base = MAT.concrete; scene.add(m); sitePick.push(m); }
+// trees: live-oak style canopies built from alpha-cut leaf-cluster cards facing outward, at the real crown positions and sizes
 const leafMap = (() => { const S = 256, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d'), r = rng(9);
   for (let i = 0; i < 160; i++) { const a = r() * Math.PI * 2, d = Math.sqrt(r()) * S * .4, x = S / 2 + Math.cos(a) * d, y = S / 2 + Math.sin(a) * d, L = S * (.035 + r() * .03), v = r();
     g.save(); g.translate(x, y); g.rotate(r() * Math.PI * 2); g.fillStyle = `rgb(${70 + v * 50 | 0},${95 + v * 55 | 0},${40 + v * 30 | 0})`; g.beginPath(); g.ellipse(0, 0, L, L * .42, 0, 0, Math.PI * 2); g.fill();
@@ -362,22 +399,50 @@ const leafMat = new THREE.MeshStandardMaterial({ map: leafMap, alphaTest: .45, s
 const leafDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: leafMap, alphaTest: .45 });
 const bark = std({ color: 0x4a3a2d, roughness: 1 });
 { const r = rng(21), dummy = new THREE.Object3D(), col = new THREE.Color(), up = new THREE.Vector3(0, 1, 0);
-  for (const [x, z, s] of [[-30, 110, 1.2], [60, 105, 1], [-95, -60, 1.3], [-75, -95, 1.1], [100, -70, .9], [140, 40, 1.1], [-150, 60, 1]]) {
-    const t = new THREE.Group(), H = 11 * s;
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(.75 * s, 1.25 * s, H, 10), bark); trunk.position.y = H / 2; t.add(trunk);
+  const T = SITE.trees, per = t => Math.round(Math.min(MOBILE ? 220 : 520, Math.max(50, t[2] * t[2] * (MOBILE ? 1.3 : 3)))), total = T.reduce((a, t) => a + per(t), 0);
+  const unit = new THREE.CylinderGeometry(.55, 1, 1, 8); unit.translate(0, .5, 0);
+  const cards = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), leafMat, total), trunks = new THREE.InstancedMesh(unit, bark, T.length), limbs = new THREE.InstancedMesh(unit, bark, T.length * 5);
+  let ci = 0;
+  T.forEach(([mx, my, R, Ht], ti) => {
+    const base = new THREE.Vector3(mx, groundAt(mx, my) - .3, -my), H = Ht * .36, s = R / 9;
+    dummy.position.copy(base); dummy.quaternion.identity(); dummy.scale.set(.85 * s, H, .85 * s); dummy.updateMatrix(); trunks.setMatrixAt(ti, dummy.matrix);
     const lobes = [];
-    for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2 + r(), L = (8 + r() * 5) * s, tilt = .75 + r() * .35;
-      const br = new THREE.Mesh(new THREE.CylinderGeometry(.3 * s, .6 * s, L, 7), bark), dir = new THREE.Vector3(Math.cos(a) * Math.sin(tilt), Math.cos(tilt), Math.sin(a) * Math.sin(tilt));
-      br.quaternion.setFromUnitVectors(up, dir); br.position.set(0, H - s, 0).addScaledVector(dir, L / 2); t.add(br);
-      lobes.push(new THREE.Vector3(0, H - s, 0).addScaledVector(dir, L).add(new THREE.Vector3(0, 2.5 * s, 0))); }
-    lobes.push(new THREE.Vector3(0, H + 6 * s, 0));
-    const N = MOBILE ? 380 : 1100, cards = new THREE.InstancedMesh(new THREE.PlaneGeometry(3.6 * s, 3.6 * s), leafMat, N);
-    for (let i = 0; i < N; i++) { const c = lobes[i % lobes.length], R = (6.5 + r() * 2.5) * s, u = r() * 2 - 1, ph = r() * Math.PI * 2, rr = R * (.6 + .4 * Math.cbrt(r())), q = Math.sqrt(1 - u * u);
-      dummy.position.set(c.x + Math.cos(ph) * q * rr, c.y + u * rr * .62, c.z + Math.sin(ph) * q * rr);
-      dummy.lookAt(dummy.position.clone().sub(c).multiplyScalar(2).add(c)); dummy.rotateZ(r() * Math.PI * 2); dummy.rotateX((r() - .5) * .8); dummy.updateMatrix(); cards.setMatrixAt(i, dummy.matrix);
-      col.setHSL(.24 + r() * .05, .35 + r() * .2, .42 + r() * .2); cards.setColorAt(i, col); }
-    cards.customDepthMaterial = leafDepth; t.add(cards);
-    t.position.set(x, -.5, z); t.rotation.y = r() * 6.28; t.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } }); scene.add(t); } }
+    for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2 + r(), L = R * (.45 + r() * .15), tilt = .8 + r() * .3, dir = new THREE.Vector3(Math.cos(a) * Math.sin(tilt), Math.cos(tilt), Math.sin(a) * Math.sin(tilt));
+      dummy.position.copy(base).add(new THREE.Vector3(0, H - .5, 0)); dummy.quaternion.setFromUnitVectors(up, dir); dummy.scale.set(.32 * s, L, .32 * s); dummy.updateMatrix(); limbs.setMatrixAt(ti * 5 + k, dummy.matrix);
+      lobes.push(base.clone().add(new THREE.Vector3(0, H - .5, 0)).addScaledVector(dir, L).add(new THREE.Vector3(0, (Ht - H) * .18, 0))); }
+    lobes.push(base.clone().add(new THREE.Vector3(0, H + (Ht - H) * .55, 0)));
+    const n = per(T[ti]), cs = 3.6 * Math.max(.7, s);
+    for (let i = 0; i < n; i++) { const c = lobes[i % lobes.length], rad = R * (.48 + r() * .12), u = r() * 2 - 1, ph = r() * Math.PI * 2, rr = rad * (.6 + .4 * Math.cbrt(r())), q = Math.sqrt(1 - u * u);
+      dummy.position.set(c.x + Math.cos(ph) * q * rr, c.y + u * rr * .7, c.z + Math.sin(ph) * q * rr); dummy.scale.set(cs, cs, cs);
+      dummy.lookAt(dummy.position.clone().sub(c).multiplyScalar(2).add(c)); dummy.rotateZ(r() * Math.PI * 2); dummy.rotateX((r() - .5) * .8); dummy.updateMatrix(); cards.setMatrixAt(ci, dummy.matrix);
+      col.setHSL(.24 + r() * .05, .32 + r() * .2, .36 + r() * .2); cards.setColorAt(ci++, col); } });
+  cards.customDepthMaterial = leafDepth; for (const m of [cards, trunks, limbs]) { m.castShadow = m.receiveShadow = true; m.frustumCulled = false; scene.add(m); } }
+// existing structures to remain: open metal carports (flat blade roofs on posts) and the red-roof shed
+{ const metal = new Map(), paint = new Map();
+  const mMat = c => metal.get(c) || metal.set(c, std({ color: c, metalness: .55, roughness: .4 })).get(c), wMat = c => paint.get(c) || paint.set(c, std({ color: c, roughness: .7 })).get(c);
+  const post = std({ color: 0x9aa3ab, metalness: .6, roughness: .45 });
+  for (const st of SITE.structures) {
+    const [x0, y0, x1, y1] = st.box, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, w = x1 - x0, d = y1 - y0;
+    const base = Math.min(groundAt(x0, y0), groundAt(x1, y0), groundAt(x0, y1), groundAt(x1, y1)) - .2;
+    const o = reg(st.id, st.label, st.info, 'site'); o.in3d = true; o.c3 = [cx, cy, st.ridge * .7];
+    const g = new THREE.Group(); g.userData.id = st.id; scene.add(g);
+    const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; m.userData.id = st.id; m.userData.base = mat; g.add(m); pickables.push(m); return m; };
+    if (!st.wall) {   // carport: posts on a ~10 ft grid around the edge, thin low-slope metal roof with fascia
+      const nx = Math.max(1, Math.round(w / 10)), ny = Math.max(1, Math.round(d / 10)), pg = new THREE.BoxGeometry(.33, st.eave, .33);
+      for (let i = 0; i <= nx; i++) for (let j = 0; j <= ny; j++) { if (i > 0 && i < nx && j > 0 && j < ny) continue; add(pg, post, x0 + w * i / nx, base + st.eave / 2, -(y0 + d * j / ny)); }
+      const rise = st.ridge - st.eave, rg = new THREE.BoxGeometry(w + 1.5, .45, d + 1.5), roof = add(rg, mMat(st.roof), cx, base + st.eave + rise / 2 + .22, -cy);
+      if (st.dir === 'ew') roof.rotation.x = Math.atan2(rise, d); else roof.rotation.z = Math.atan2(rise, w);
+    } else {          // enclosed shed with a gable roof
+      add(new THREE.BoxGeometry(w, st.eave, d), wMat(st.wall), cx, base + st.eave / 2, -cy);
+      const ov = 1, along = st.dir === 'ew', span = (along ? d : w) / 2 + ov, len = (along ? w : d) + 2 * ov, rise = (st.ridge - st.eave) * span / ((along ? d : w) / 2);
+      const pitch = Math.atan2(rise, span), sl = Math.hypot(span, rise);
+      for (const side of [-1, 1]) { const slab = add(new THREE.BoxGeometry(along ? len : sl, .35, along ? sl : len), mMat(st.roof), 0, 0, 0);
+        if (along) { slab.position.set(cx, base + st.ridge - rise / 2 - ov * Math.tan(pitch) / 2, -cy + side * span / 2); slab.rotation.x = side * pitch; }
+        else { slab.position.set(cx + side * span / 2, base + st.ridge - rise / 2 - ov * Math.tan(pitch) / 2, -cy); slab.rotation.z = -side * pitch; } }
+      const tri = new THREE.Shape([new THREE.Vector2(-(along ? d : w) / 2, 0), new THREE.Vector2((along ? d : w) / 2, 0), new THREE.Vector2(0, st.ridge - st.eave)]);
+      for (const side of [-1, 1]) { const gm = add(new THREE.ShapeGeometry(tri), wMat(st.wall), 0, 0, 0); gm.material.side = THREE.DoubleSide;
+        if (along) { gm.rotation.y = Math.PI / 2; gm.position.set(cx + side * w / 2, base + st.eave, -cy); } else gm.position.set(cx, base + st.eave, -cy + side * d / 2); }
+    } } }
 { const r = rng(33), dummy = new THREE.Object3D(), col = new THREE.Color(), keep = [];
   const front = [], avoid = [];
   for (const g of house.children) { const e = objs.get(g.userData.id); if (!e) continue; const b = new THREE.Box3().setFromObject(g);
@@ -402,25 +467,31 @@ const bark = std({ color: 0x4a3a2d, roughness: 1 });
   shrubs.customDepthMaterial = leafDepth; shrubs.castShadow = shrubs.receiveShadow = true; if (keep.length) scene.add(shrubs); }
 scene.add(new THREE.HemisphereLight(0xcfdcea, 0x5d5a3c, .35));
 const sun = new THREE.DirectionalLight(0xfff0d8, 3.1); sun.castShadow = true; sun.shadow.mapSize.set(MOBILE ? 2048 : 4096, MOBILE ? 2048 : 4096); sun.shadow.bias = -.0003; sun.shadow.normalBias = .5; sun.shadow.radius = 3;
-Object.assign(sun.shadow.camera, { left: -175, right: 175, top: 150, bottom: -150, near: 10, far: 700 }); sun.position.set(center.x - 160, 190, center.z + 200); sun.target.position.copy(center); scene.add(sun, sun.target);
+Object.assign(sun.shadow.camera, MOBILE ? { left: -190, right: 190, top: 190, bottom: -190, near: 10, far: 800 } : { left: -260, right: 260, top: 260, bottom: -260, near: 10, far: 900 }); sun.position.set(center.x - 160, 190, center.z + 200); sun.target.position.copy(center); scene.add(sun, sun.target);
 // physical sky behind the house, and the same sky prefiltered as the environment for soft fill light and window reflections
 function makeSky(scale) { const k = new Sky(); k.scale.setScalar(scale); const u = k.material.uniforms; u.turbidity.value = 3.2; u.rayleigh.value = 1.1; u.mieCoefficient.value = .004; u.mieDirectionalG.value = .86;
   u.sunPosition.value.copy(sun.position).sub(center).normalize(); u.skyGain = { value: .42 };
   k.material.fragmentShader = 'uniform float skyGain;\n' + k.material.fragmentShader.replace('gl_FragColor = vec4( retColor, 1.0 );', 'gl_FragColor = vec4( retColor * skyGain, 1.0 );'); return k; }
-scene.add(makeSky(2400));
+scene.add(makeSky(9000));
 { const pm = new THREE.PMREMGenerator(renderer), es = new THREE.Scene(); es.add(makeSky(500));
   const gnd = new THREE.Mesh(new THREE.CircleGeometry(400, 32), new THREE.MeshBasicMaterial({ color: 0x3f4a2a })); gnd.rotation.x = -Math.PI / 2; gnd.position.y = -1; es.add(gnd);
   scene.environment = pm.fromScene(es, 0, .5, 1200).texture; pm.dispose(); }
 for (const m of Object.values(MAT)) if (m !== MAT.glass) m.envMapIntensity = .55;
-grassMat.envMapIntensity = .35; leafMat.envMapIntensity = .4;
-scene.fog = new THREE.Fog(0xcdd8e1, 260, 1300);
+grassMat.envMapIntensity = .35; groundMat.envMapIntensity = .3; outerMat.envMapIntensity = .3; leafMat.envMapIntensity = .4;
+scene.fog = new THREE.Fog(0xcdd8e1, 900, 7000);
 function applySky() { needsRender = true; if (svg.firstChild) drawPlan(); }
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applySky);
 const cams = {
-  front: () => [M3(16, -175, 14), M3(16, -20, 10)], entry: () => [M3(36, -85, 7), M3(16, -36, 10)], left: () => [M3(-170, -8, 14), M3(-10, -5, 10)],
-  right: () => [M3(170, 5, 14), M3(20, 0, 10)], rear: () => [M3(10, 165, 16), M3(10, 0, 10)], aerial: () => MOBILE ? [M3(-62, -118, 80), M3(4, -8, 4)] : [M3(-95, -160, 105), M3(0, -5, 4)] };
+  front: () => [M3(-34, -108, 8), M3(6, -10, 10)], entry: () => [M3(36, -85, 7), M3(16, -36, 10)], left: () => [M3(-128, -26, 9), M3(-40, -6, 8)],
+  right: () => [M3(170, 5, 14), M3(20, 0, 10)], rear: () => [M3(10, 165, 16), M3(10, 0, 10)], site: () => [M3(-420, -330, 360), M3(-30, -40, 0)], aerial: () => MOBILE ? [M3(-62, -118, 80), M3(4, -8, 4)] : [M3(-95, -160, 105), M3(0, -5, 4)] };
 let tween = null;
-function goCam(p, t, instant) { if (instant || matchMedia('(prefers-reduced-motion: reduce)').matches) { camera.position.copy(p); controls.target.copy(t); controls.update(); return; } tween = { p0: camera.position.clone(), t0: controls.target.clone(), p, t, s: performance.now() }; }
+// slide a preset camera toward its target until it is out of every real tree crown (and its eye stays above the terrain)
+function clearCam(p, t) { const q = p.clone(), dir = t.clone().sub(p); const len = dir.length(); dir.normalize();
+  for (let d = 0; d < len - 15; d += 3) { q.copy(p).addScaledVector(dir, d);
+    const inTree = SITE.trees.some(([mx, my, R, H]) => q.y < H + 3 && Math.hypot(q.x - mx, -q.z - my) < R + 5);
+    if (!inTree) break; }
+  q.y = Math.max(q.y, groundAt(q.x, -q.z) + 5); return q; }
+function goCam(p, t, instant) { p = clearCam(p, t); if (instant || matchMedia('(prefers-reduced-motion: reduce)').matches) { camera.position.copy(p); controls.target.copy(t); controls.update(); return; } tween = { p0: camera.position.clone(), t0: controls.target.clone(), p, t, s: performance.now() }; }
 document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => { const [p, t] = cams[b.dataset.cam](); goCam(p, t); });
 $('roofbtn').onclick = () => { const on = $('roofbtn').getAttribute('aria-pressed') !== 'true'; $('roofbtn').setAttribute('aria-pressed', String(on)); roofGroup.forEach(g => g.visible = on); needsRender = true; };
 const togglePins = () => { showPins = !showPins; ['pinsbtn', 'pinsbtn2'].forEach(i => $(i).setAttribute('aria-pressed', String(showPins))); drawPins(); };
@@ -430,15 +501,15 @@ function hiMat(base, strong) { const k = base.uuid + strong; if (!hiCache.has(k)
 let hoverId = null;
 function highlight3d() { needsRender = true; for (const m of pickables) { const id = m.userData.id; m.material = selected && id === selected.id ? hiMat(m.userData.base, true) : id === hoverId ? hiMat(m.userData.base, false) : m.userData.base; } }
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
-function hit3d(clientX, clientY) { const r = canvas.getBoundingClientRect(); ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(ndc, camera);
-  const hits = ray.intersectObjects([...pickables.filter(m => m.parent.visible), ...sitePick], false); if (!hits.length) return null; const h = hits[0]; return { id: h.object.userData.id, point: { x: h.point.x, y: -h.point.z, z: h.point.y } }; }
+function hit3d(clientX, clientY, withSite = true) { const r = canvas.getBoundingClientRect(); ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(ndc, camera);
+  const hits = ray.intersectObjects(withSite ? [...pickables.filter(m => m.parent.visible), ...sitePick] : pickables.filter(m => m.parent.visible), false); if (!hits.length) return null; const h = hits[0]; return { id: h.object.userData.id, point: { x: h.point.x, y: -h.point.z, z: h.point.y } }; }
 function resize() { needsRender = true; const r = stage.getBoundingClientRect(); renderer.setSize(r.width, r.height, false); camera.aspect = r.width / r.height; camera.fov = r.width < 640 ? 55 : 40; camera.updateProjectionMatrix(); if (vb) fitPlan(true); drawPins(); }
 new ResizeObserver(resize).observe(stage);
 let down = null;
 const onDown = e => { down = { x: e.clientX, y: e.clientY }; };
 const isClick = e => down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6;
 canvas.addEventListener('pointerdown', onDown);
-canvas.addEventListener('pointermove', e => { if (e.buttons) { tip.hidden = true; return; } const h = hit3d(e.clientX, e.clientY); const id = h && h.id !== 'site' ? h.id : null; if (id !== hoverId) { hoverId = id; highlight3d(); } showTip(e, id); });
+canvas.addEventListener('pointermove', e => { if (e.buttons) { tip.hidden = true; return; } const h = hit3d(e.clientX, e.clientY, false); const id = h && h.id !== 'site' ? h.id : null; if (id !== hoverId) { hoverId = id; highlight3d(); } showTip(e, id); });
 canvas.addEventListener('pointerleave', () => { hoverId = null; highlight3d(); tip.hidden = true; });
 canvas.addEventListener('pointerup', e => { if (!isClick(e) || e.button !== 0) return; const h = hit3d(e.clientX, e.clientY); if (!h) return; select(h.id, h.point); });
 function showTip(e, id) { const o = id && objs.get(id); if (!o) { tip.hidden = true; return; } const r = stage.getBoundingClientRect(); tip.textContent = o.label; tip.style.left = (e.clientX - r.left) + 'px'; tip.style.top = (e.clientY - r.top) + 'px'; tip.hidden = false; }
