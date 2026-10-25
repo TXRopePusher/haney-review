@@ -230,7 +230,7 @@ import { Sky } from 'three/addons/objects/Sky.js';
 
 // ================= feedback store: a private GitHub repo, one JSON file per comment =================
 const STORE = { owner: 'TXRopePusher', repo: 'haney-feedback', branch: 'main' };
-const KEY = 'e5bb4274da6360343463a56850d69196', SEALED = 'AlwWCkFQaEQFFWkCB3F8f2VxAWpRdwNabFUhRGB+QHc3aloxZGt+ZCVRWwNlWkltB3pxei5YTn9eSQB3Y2AJRT1gAVJ8XFRgJyVOYUZidWxkAgRmV3RzfWZnIQ5g';
+const KEY = '2b2166e7f9831588c7624b02e0213388', SEALED = 'VQtGWUNUOkcHTWcCAHR3czVyAWsEIAVQPFV3Q2p8QXlgPQpiZm8sZycJVQNiX0JhV3lxe3sPSHUOSVZwaWIIS2o3UQF+WAZjJX1AYUFnfmA0AQRnAiN1dzZndwlq';
 const TOKEN = (() => { const b = atob(SEALED), k = KEY; let s = ''; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b.charCodeAt(i) ^ k.charCodeAt(i % k.length)); return s; })();
 const API = `https://api.github.com/repos/${STORE.owner}/${STORE.repo}/contents/`;
 const H = (extra) => ({ Authorization: 'Bearer ' + TOKEN, 'X-GitHub-Api-Version': '2022-11-28', ...extra });
@@ -259,7 +259,7 @@ const uid = () => new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14) 
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } };
 
 // ================= model data =================
-const BUILD = '20261025163629';   // stamped by publish.py so phones and browsers never mix cached files from different builds
+const BUILD = '20261025165738';   // stamped by publish.py so phones and browsers never mix cached files from different builds
 const DATA = await (await fetch('data.json?b=' + BUILD)).json();
 // real site: USGS 3DEP lidar terrain, USDA NAIP imagery, existing structures and trees (built by geo_build.py)
 const SITE = await fetch('site.json?b=' + BUILD).then(r => r.ok ? r.json() : null).catch(() => null);
