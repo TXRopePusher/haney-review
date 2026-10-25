@@ -60,6 +60,7 @@
   .railtabs { display: flex; border-bottom: 1px solid var(--line); }
   .railtabs button { flex: 1; border: 0; background: transparent; padding: 12px 8px; font-weight: 600; font-size: 13px; color: var(--soft); cursor: pointer; border-bottom: 2px solid transparent; }
   .railtabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+  .citem.resolved { opacity: .62; } .resolved-box { margin-top: 6px; } .resolved-box summary { cursor: pointer; font-weight: 600; color: var(--soft); padding: 6px 0; }
   .railtabs .fold { flex: 0 0 46px; padding: 0; font-size: 22px; line-height: 1; border-left: 1px solid var(--line); }
   .railtabs .fold span { display: inline-block; transition: transform .2s; }
   main.folded { grid-template-columns: 1fr 0; } main.folded aside.rail { display: none; }
@@ -230,7 +231,7 @@ import { Sky } from 'three/addons/objects/Sky.js';
 
 // ================= feedback store: a private GitHub repo, one JSON file per comment =================
 const STORE = { owner: 'TXRopePusher', repo: 'haney-feedback', branch: 'main' };
-const KEY = '5320801fbf746fe84222fc4f61604647', SEALED = 'UlpGWE1SbhYDEmgFBycqc2J3BWtWIQEEb1RzQm15TXZnbApjaGl4NiNWWgRlDB9hAHx1eykOTCFdSFJxbmcERG1mUQBwXlIyISJPZkY0I2BjBABnUCJxI2Vmcwht';
+const KEY = 'b3c9a37955510e267d09763347ac2f4a', SEALED = 'BVoXURRRaElUQWoAASR9fWEhB2AHdAZRbVIkEWspTSAwbFtqMWp+aXQFWAFjD0hvAyp3cHhbS3RfTgUiaDcEEjpmAAkpXVRtdnFNY0A3dG5gUgJsAXd2dmdgJFtr';
 const TOKEN = (() => { const b = atob(SEALED), k = KEY; let s = ''; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b.charCodeAt(i) ^ k.charCodeAt(i % k.length)); return s; })();
 const API = `https://api.github.com/repos/${STORE.owner}/${STORE.repo}/contents/`;
 const H = (extra) => ({ Authorization: 'Bearer ' + TOKEN, 'X-GitHub-Api-Version': '2022-11-28', ...extra });
@@ -259,7 +260,7 @@ const uid = () => new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14) 
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } };
 
 // ================= model data =================
-const BUILD = '20261025173030';   // stamped by publish.py so phones and browsers never mix cached files from different builds
+const BUILD = '20261025181547';   // stamped by publish.py so phones and browsers never mix cached files from different builds
 const DATA = await (await fetch('data.json?b=' + BUILD)).json();
 // real site: USGS 3DEP lidar terrain, USDA NAIP imagery, existing structures and trees (built by geo_build.py)
 const SITE = await fetch('site.json?b=' + BUILD).then(r => r.ok ? r.json() : null).catch(() => null);
@@ -677,9 +678,12 @@ function screenOf(c) {   // c: comment record -> client px in the current view, 
   const s = toScreen(x, y), r = svg.getBoundingClientRect(); if (s.x < r.left || s.x > r.right || s.y < r.top || s.y > r.bottom) return null; return { x: s.x - r.left, y: s.y - r.top };
 }
 const threads = () => comments.filter(c => !c.replyTo);
+let resolved = new Set();   // thread ids the design team has closed (status/resolved.json in the feedback store); their pins are hidden
+const openThreads = () => threads().filter(c => !resolved.has(c.id));
+const numOf = c => resolved.has(c.id) ? '✓' : String(openThreads().indexOf(c) + 1);
 function drawPins() {
   pinsEl.textContent = ''; if (!showPins) return;
-  threads().forEach((c, i) => { const s = screenOf(c); if (!s) return; const b = document.createElement('button'); b.className = 'pin' + (openThread === c.id ? ' open' : ''); b.style.left = s.x + 'px'; b.style.top = s.y + 'px';
+  openThreads().forEach((c, i) => { const s = screenOf(c); if (!s) return; const b = document.createElement('button'); b.className = 'pin' + (openThread === c.id ? ' open' : ''); b.style.left = s.x + 'px'; b.style.top = s.y + 'px';
     b.textContent = String(i + 1); b.title = c.author + ': ' + c.label; b.onclick = () => openThreadById(c.id, true); pinsEl.appendChild(b); });
   if (selected && !openThread) { const s = screenOf({ objId: selected.id, point: lastPoint, view }); if (s) { const b = document.createElement('div'); b.className = 'pin draft'; b.style.left = s.x + 'px'; b.style.top = s.y + 'px'; b.textContent = '+'; pinsEl.appendChild(b); } }
 }
@@ -731,10 +735,10 @@ function renderCompose() {
   if (!selected) {
     pane.append(h('div', 'eyebrow', 'Nothing selected'), h('h2', '', 'Click anything in the house'),
       h('p', 'hint', 'Pick a wall, window, roof, column, door or room, or an open spot on the lawn or plan. Then write your note here and attach photos of things you like.'));
-    const recent = threads().slice(-3).reverse(); if (recent.length) { pane.append(h('div', 'eyebrow', 'Latest comments')); const l = h('div', 'list'); recent.forEach(c => l.appendChild(threadItem(c))); pane.append(l); }
+    const recent = openThreads().slice(-3).reverse(); if (recent.length) { pane.append(h('div', 'eyebrow', 'Latest comments')); const l = h('div', 'list'); recent.forEach(c => l.appendChild(threadItem(c))); pane.append(l); }
     return;
   }
-  const others = threads().filter(c => c.objId === selected.id && selected.id !== 'site' && selected.id !== 'plan-note');
+  const others = openThreads().filter(c => c.objId === selected.id && selected.id !== 'site' && selected.id !== 'plan-note');
   pane.append(h('div', 'eyebrow', CAT[selected.cat] || 'Object'), h('h2', '', selected.label));
   if (selected.info) pane.append(h('div', 'info', selected.info));
   const zoom = h('button', 'btn', 'Zoom to it'); zoom.onclick = () => frame(selected, lastPoint); const zrow = h('div', 'row'); zrow.append(zoom); pane.append(zrow);
@@ -746,8 +750,7 @@ function msg(c, isReply) { const m = h('div', 'msg' + (isReply ? ' reply' : ''))
   m.append(meta); if (c.text) m.append(h('p', '', c.text)); if (c.images && c.images.length) { const tb = h('div', 'thumbs'); m.append(tb); renderImages(tb, c.images); } return m; }
 function renderThread(pane) {
   const c = comments.find(x => x.id === openThread); if (!c) { openThread = null; return renderCompose(); }
-  const idx = threads().indexOf(c) + 1;
-  const head = h('div', 'eyebrow'); head.append(h('span', 'num', String(idx)), document.createTextNode(CAT[c.cat] || 'Comment')); pane.append(head, h('h2', '', c.label));
+  const head = h('div', 'eyebrow'); head.append(h('span', 'num', numOf(c)), document.createTextNode((CAT[c.cat] || 'Comment') + (resolved.has(c.id) ? ' · resolved' : ''))); pane.append(head, h('h2', '', c.label));
   const row = h('div', 'row'); const zoom = h('button', 'btn', 'Show me'); zoom.onclick = () => frame(objs.get(c.objId) || { cat: c.cat, in3d: c.point && c.point.z !== undefined, inPlan: true }, c.point);
   const back = h('button', 'btn', 'New comment here'); back.onclick = () => { openThread = null; selected = objs.get(c.objId) || selected; lastPoint = c.point; highlight3d(); highlightPlan(); renderCompose(); drawPins(); };
   row.append(zoom, back); pane.append(row);
@@ -756,14 +759,16 @@ function renderThread(pane) {
 }
 function openThreadById(id, frameIt) { openThread = id; const c = comments.find(x => x.id === id); if (c) { selected = objs.get(c.objId) || null; lastPoint = c.point; if (frameIt) frame(selected || { cat: c.cat, in3d: !!(c.point && c.point.z !== undefined), inPlan: true }, c.point); }
   highlight3d(); highlightPlan(); showPane('compose'); renderCompose(); drawPins(); }
-function threadItem(c) { const b = h('button', 'citem' + (openThread === c.id ? ' active' : '')); const top = h('div', 'top'); const lab = h('span'); lab.append(h('span', 'num', String(threads().indexOf(c) + 1)), h('b', '', c.author));
+function threadItem(c) { const b = h('button', 'citem' + (openThread === c.id ? ' active' : '') + (resolved.has(c.id) ? ' resolved' : '')); const top = h('div', 'top'); const lab = h('span'); lab.append(h('span', 'num', numOf(c)), h('b', '', c.author));
   top.append(lab, h('span', '', fmtTime(c.created))); const replies = comments.filter(r => r.replyTo === c.id).length; const pics = (c.images || []).length;
   b.append(top, h('div', 'lab', c.label), h('div', 'snip', (c.text || '(photo)') + (pics ? `  · ${pics} photo${pics > 1 ? 's' : ''}` : '') + (replies ? `  · ${replies} repl${replies > 1 ? 'ies' : 'y'}` : '')));
   b.onclick = () => openThreadById(c.id, true); return b; }
 function renderAll() {
-  const pane = $('pane-all'); pane.textContent = ''; const ts = threads(); $('count').textContent = ts.length ? '(' + ts.length + ')' : '';
-  if (!ts.length) { pane.append(h('h2', '', 'No comments yet'), h('p', 'hint', 'Click anything in the house to leave the first one.')); }
+  const pane = $('pane-all'); pane.textContent = ''; const ts = openThreads(), done = threads().filter(c => resolved.has(c.id)); $('count').textContent = ts.length ? '(' + ts.length + ')' : '';
+  if (!ts.length) { pane.append(h('h2', '', done.length ? 'All caught up' : 'No comments yet'), h('p', 'hint', done.length ? 'Every comment so far has been addressed. Click anything in the house to add another.' : 'Click anything in the house to leave the first one.')); }
   else { const l = h('div', 'list'); [...ts].reverse().forEach(c => l.appendChild(threadItem(c))); pane.append(l); }
+  if (done.length) { const det = document.createElement('details'); det.className = 'resolved-box'; const sm = document.createElement('summary'); sm.textContent = `Resolved (${done.length})`; det.append(sm);
+    const l = h('div', 'list'); [...done].reverse().forEach(c => l.appendChild(threadItem(c))); det.append(l); pane.append(det); }
   drawPins(); if (openThread || !selected) renderCompose();
 }
 function showPane(p) { document.querySelectorAll('[data-pane]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.pane === p))); ['compose', 'all', 'find'].forEach(x => $('pane-' + x).hidden = x !== p); }
@@ -803,7 +808,10 @@ async function sync() { if (syncing || document.hidden) return; syncing = true;
   try { const files = (await listDir('comments')).filter(f => f.name.endsWith('.json')); const known = new Set(comments.map(c => c.id + '.json')); const fresh = files.filter(f => !known.has(f.name));
     const recs = await Promise.all(fresh.map(f => getRaw('comments/' + f.name).catch(() => null))); let added = false;
     for (const r of recs) if (r && r.id && !comments.some(c => c.id === r.id)) { comments.push(r); added = true; }
-    if (added) { comments.sort((a, b) => a.created.localeCompare(b.created)); renderAll(); } }
+    let rs = null; try { rs = await getRaw('status/resolved.json'); } catch {}
+    const nr = new Set((rs && rs.resolved) || []), changed = nr.size !== resolved.size || [...nr].some(x => !resolved.has(x)); if (changed) resolved = nr;
+    if (added) comments.sort((a, b) => a.created.localeCompare(b.created));
+    if (added || changed) renderAll(); }
   catch {} finally { syncing = false; } }
 
 // ================= loop & start =================
