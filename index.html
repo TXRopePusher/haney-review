@@ -166,7 +166,7 @@
       <div class="controls" id="controls3d">
         <div class="grp" role="group" aria-label="Camera">
           <button data-cam="front">Front</button><button data-cam="entry">Entry</button><button data-cam="left">Garage side</button>
-          <button data-cam="right">Bedroom side</button><button data-cam="rear">Rear</button><button data-cam="aerial">Aerial</button><button data-cam="site">Site</button>
+          <button data-cam="right">Bedroom side</button><button data-cam="rear">Rear</button><button data-cam="walk">Walk</button><button data-cam="aerial">Aerial</button><button data-cam="site">Site</button>
         </div>
         <div class="grp"><button id="roofbtn" aria-pressed="true">Roof</button><button id="pinsbtn" aria-pressed="true">Pins</button></div>
       </div>
@@ -230,7 +230,7 @@ import { Sky } from 'three/addons/objects/Sky.js';
 
 // ================= feedback store: a private GitHub repo, one JSON file per comment =================
 const STORE = { owner: 'TXRopePusher', repo: 'haney-feedback', branch: 'main' };
-const KEY = '2b2166e7f9831588c7624b02e0213388', SEALED = 'VQtGWUNUOkcHTWcCAHR3czVyAWsEIAVQPFV3Q2p8QXlgPQpiZm8sZycJVQNiX0JhV3lxe3sPSHUOSVZwaWIIS2o3UQF+WAZjJX1AYUFnfmA0AQRnAiN1dzZndwlq';
+const KEY = '5320801fbf746fe84222fc4f61604647', SEALED = 'UlpGWE1SbhYDEmgFBycqc2J3BWtWIQEEb1RzQm15TXZnbApjaGl4NiNWWgRlDB9hAHx1eykOTCFdSFJxbmcERG1mUQBwXlIyISJPZkY0I2BjBABnUCJxI2Vmcwht';
 const TOKEN = (() => { const b = atob(SEALED), k = KEY; let s = ''; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b.charCodeAt(i) ^ k.charCodeAt(i % k.length)); return s; })();
 const API = `https://api.github.com/repos/${STORE.owner}/${STORE.repo}/contents/`;
 const H = (extra) => ({ Authorization: 'Bearer ' + TOKEN, 'X-GitHub-Api-Version': '2022-11-28', ...extra });
@@ -259,13 +259,13 @@ const uid = () => new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14) 
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } };
 
 // ================= model data =================
-const BUILD = '20261025165738';   // stamped by publish.py so phones and browsers never mix cached files from different builds
+const BUILD = '20261025173030';   // stamped by publish.py so phones and browsers never mix cached files from different builds
 const DATA = await (await fetch('data.json?b=' + BUILD)).json();
 // real site: USGS 3DEP lidar terrain, USDA NAIP imagery, existing structures and trees (built by geo_build.py)
 const SITE = await fetch('site.json?b=' + BUILD).then(r => r.ok ? r.json() : null).catch(() => null);
 const $ = id => document.getElementById(id);
 const stage = $('stage'), canvas = $('three'), svg = $('plan'), tip = $('tip'), pinsEl = $('pins');
-const CAT = { room: 'Rooms', stone: 'Entry portico', column: 'Entry portico', slab: 'Porches', window: 'Windows', door: 'Doors', roof: 'Roofs', wall: 'Exterior walls', int: 'Interior walls', chimney: 'Fireplaces', site: 'Site' };
+const CAT = { room: 'Rooms', stone: 'Entry portico', column: 'Entry portico', slab: 'Porches', window: 'Windows', door: 'Doors', roof: 'Roofs', wall: 'Exterior walls', int: 'Interior walls', chimney: 'Fireplaces', decor: 'Porch furnishings', site: 'Site' };
 const objs = new Map();
 function reg(id, label, info, cat) { const k = String(id); let o = objs.get(k); if (!o) { o = { id: k, label, info, cat }; objs.set(k, o); } return o; }
 for (const e of DATA.elements) { const o = reg(e.id, e.label, e.info, e.cat); o.in3d = true; o.c3 = e.c; }
@@ -311,7 +311,20 @@ const MAT = {
   frame: std({ color: 0x1c1c1c, roughness: .4, metalness: .2 }), wood: std({ color: 0x4f2e1b, roughness: .42 }), metal: std({ color: 0x8c8c88, roughness: .32, metalness: .75 }),
   garage: std({ color: 0xece6d6, roughness: .42, metalness: .15 }), cedar: std({ ...maps('cedar', false), normalScale: V2(.5) }),   /* stained cedar carriage doors */ concrete: std({ ...maps('conc', false), normalScale: V2(.6), color: 0xc4c2bc, roughnessMap: null, roughness: .93 }),   /* broom finish: matte */
   interior: std({ color: 0xd9d4ca, roughness: .9 }), post: std({ color: 0x7a4e2c, roughness: .7 }) };
-function pick(name, cat) { const n = name.toLowerCase();
+const decorCache = new Map();
+const wickerTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); g.fillStyle = '#8a6a48'; g.fillRect(0, 0, 128, 128);
+  for (let y = 0; y < 128; y += 8) for (let x = 0; x < 128; x += 16) { const o = (y / 8) % 2 ? 8 : 0; g.fillStyle = '#b08a60'; g.fillRect((x + o) % 128, y + 1, 12, 6); g.fillStyle = '#6e5238'; g.fillRect((x + o + 12) % 128, y, 3, 8); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; return t; })();
+function decorMat(n, c) {   // porch furnishings: colour from the Revit material, finish from its name
+  if (decorCache.has(n)) return decorCache.get(n);
+  const color = new THREE.Color().setRGB(c[0] / 255, c[1] / 255, c[2] / 255, THREE.SRGBColorSpace); let m, uv = 0;
+  if (n.includes('glow')) m = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.4, roughness: .3, side: THREE.DoubleSide });
+  else if (n.includes('iron')) m = std({ color: 0x1b1b1b, metalness: .55, roughness: .45 });
+  else if (n.includes('wicker')) { m = std({ map: wickerTex, roughness: .85 }); uv = 0.6; }
+  else m = std({ color, roughness: n.includes('teak') || n.includes('walnut') ? .55 : .95 });
+  const r = { m, uv }; decorCache.set(n, r); return r; }
+function pick(name, cat, color) { const n = name.toLowerCase();
+  if (n.startsWith('decor - ') && color) return decorMat(n, color);
   if (n.includes('stone')) return { m: MAT.stone, uv: 4.4 }; if (n.includes('shingle')) return { m: MAT.roof, uv: 6.6 }; if (cat === 'roof') return { m: MAT.fascia };
   if (n.includes('soffit')) return { m: MAT.fascia }; if (n.includes('glass')) return { m: MAT.glass }; if (n.includes('cedar')) return { m: MAT.cedar, uv: 3.2 }; if (n.includes('clad')) return { m: MAT.frame }; if (n.includes('cherry') || n.includes('stained')) return { m: MAT.wood };
   if (n.includes('aluminum')) return { m: MAT.metal }; if (n.includes('ivory') || (n === 'default' && cat === 'door')) return { m: MAT.garage }; if (n.includes('concrete')) return { m: MAT.concrete, uv: 6.56 };
@@ -327,7 +340,7 @@ for (const e of DATA.elements) {
   for (const part of e.parts) {
     const src = part.p, pos = new Float32Array(src.length);
     for (let i = 0; i < src.length; i += 3) { pos[i] = src[i] / 100; pos[i + 1] = src[i + 2] / 100; pos[i + 2] = -src[i + 1] / 100; }
-    const ch = pick(DATA.materials[part.m].name, e.cat), geo = new THREE.BufferGeometry();
+    const ch = pick(DATA.materials[part.m].name, e.cat, DATA.materials[part.m].color), geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); if (ch.uv) geo.setAttribute('uv', new THREE.BufferAttribute(planarUV(pos, ch.uv), 2)); geo.computeVertexNormals();
     const m = new THREE.Mesh(geo, ch.m); m.castShadow = ch.m !== MAT.glass; m.receiveShadow = true; m.userData.id = g.userData.id; m.userData.base = ch.m; g.add(m); pickables.push(m);
   }
@@ -387,7 +400,9 @@ scene.add(terrain(TOUT, hOut, outerMat, 2, TIN.size / 2 - 2 * TOUT.size / (TOUT.
 for (const [x0, y0, x1, y1, kind] of SITE.drives) {
   const w = x1 - x0, d = y1 - y0, g = new THREE.PlaneGeometry(w, d, Math.max(1, Math.ceil(w / 4)), Math.max(1, Math.ceil(d / 4))); g.rotateX(-Math.PI / 2);
   const p = g.attributes.position, uv = g.attributes.uv, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-  for (let i = 0; i < p.count; i++) { const mx = cx + p.getX(i), my = cy - p.getZ(i); p.setY(i, groundAt(mx, my) + .12); uv.setXY(i, mx / 6.56, my / 6.56); }
+  for (let i = 0; i < p.count; i++) { const mx = cx + p.getX(i), my = cy - p.getZ(i); let z = groundAt(mx, my) + .12;
+    if (kind === 'apron' && SITE.garage_face != null) z = Math.max(z, -0.1 - Math.max(0, SITE.garage_face - mx) * 0.065);   // drive ramps up to the garage floor
+    p.setY(i, z); uv.setXY(i, mx / 6.56, my / 6.56); }
   g.computeVertexNormals(); const m = new THREE.Mesh(g, MAT.concrete); m.position.set(cx, 0, -cy); m.receiveShadow = true; m.userData.id = 'site'; m.userData.base = MAT.concrete; scene.add(m); sitePick.push(m); }
 // trees: live-oak style canopies built from alpha-cut leaf-cluster cards facing outward, at the real crown positions and sizes
 const leafMap = (() => { const S = 256, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d'), r = rng(9);
@@ -399,7 +414,7 @@ const leafMat = new THREE.MeshStandardMaterial({ map: leafMap, alphaTest: .45, s
 const leafDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: leafMap, alphaTest: .45 });
 const bark = std({ color: 0x4a3a2d, roughness: 1 });
 { const r = rng(21), dummy = new THREE.Object3D(), col = new THREE.Color(), up = new THREE.Vector3(0, 1, 0);
-  const T = SITE.trees, per = t => Math.round(Math.min(MOBILE ? 220 : 520, Math.max(50, t[2] * t[2] * (MOBILE ? 1.3 : 3)))), total = T.reduce((a, t) => a + per(t), 0);
+  const T = SITE.trees.concat(SITE.ornamental || []), per = t => Math.round(Math.min(MOBILE ? 220 : 520, Math.max(50, t[2] * t[2] * (MOBILE ? 1.3 : 3)))), total = T.reduce((a, t) => a + per(t), 0);
   const unit = new THREE.CylinderGeometry(.55, 1, 1, 8); unit.translate(0, .5, 0);
   const cards = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), leafMat, total), trunks = new THREE.InstancedMesh(unit, bark, T.length), limbs = new THREE.InstancedMesh(unit, bark, T.length * 5);
   let ci = 0;
@@ -450,28 +465,89 @@ const bark = std({ color: 0x4a3a2d, roughness: 1 });
         add(new THREE.BoxGeometry(w + .1, .45, d + .1), tm, cx, base + .22, -cy);
       }
     } } }
-{ const r = rng(33), dummy = new THREE.Object3D(), col = new THREE.Color(), keep = [];
-  const front = [], avoid = [];
-  for (const g of house.children) { const e = objs.get(g.userData.id); if (!e) continue; const b = new THREE.Box3().setFromObject(g);
-    if (e.cat === 'wall' && /\(south\)/.test(e.label)) front.push(b); else if (e.cat === 'slab' || e.cat === 'stone' || e.cat === 'column' || (e.cat === 'door' && /\(south\)/.test(e.label))) avoid.push(b); }
-  const mulch = std({ color: 0x3a2a1f, roughness: 1, map: macro });
-  for (const b of front) { const z = b.max.z;
-    if (front.some(o => o !== b && o.min.z > z + .5 && o.min.x < b.max.x && o.max.x > b.min.x)) continue;   // wall hidden behind another
-    let x0 = b.min.x + 1.5, x1 = b.max.x - 1.5; if (x1 - x0 < 4) continue;
-    for (let x = x0; x <= x1; x += 4.2) { const p = new THREE.Vector3(x, 0, z + 2.6);
-      if (avoid.some(a => p.x > a.min.x - 2 && p.x < a.max.x + 2 && p.z > a.min.z - 3 && p.z < a.max.z + 4)) continue; keep.push(p); }
+// ---------- front landscape: ramped meandering walk and layered North Texas native plantings (beds are painted in the aerial) ----------
+{
+  const r = rng(77), dummy = new THREE.Object3D(), col = new THREE.Color(), up = new THREE.Vector3(0, 1, 0);
+  // walk: 4' concrete ribbon rising from the drive to the porch, with short stone-coloured edges down to grade
+  if (SITE.walk) {
+    const P = SITE.walk.pts, w = SITE.walk.w / 2, pos = [], uvs = [], idx = [], side = [], sidx = [];
+    for (let i = 0; i < P.length; i++) {
+      const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)]; let tx = b[0] - a[0], ty = b[1] - a[1]; const L = Math.hypot(tx, ty) || 1; tx /= L; ty /= L;
+      const nx = ty, ny = -tx, z = P[i][2];
+      for (const s of [-1, 1]) { const x = P[i][0] + nx * w * s, y = P[i][1] + ny * w * s; pos.push(x, z, -y); uvs.push(x / 6.56, y / 6.56);
+        side.push(x, z, -y, x, Math.min(z, groundAt(x, y)) - 0.2, -y); }
+      if (i > 0) { const k = (i - 1) * 2; idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3);
+        for (const s of [0, 1]) { const q = ((i - 1) * 2 + s) * 2; sidx.push(q, q + 4, q + 1, q + 1, q + 4, q + 5); } }
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2)); g.setIndex(idx); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, MAT.concrete); m.receiveShadow = true; m.userData.id = 'site'; m.userData.base = MAT.concrete; scene.add(m); sitePick.push(m);
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(side, 3)); sg.setIndex(sidx); sg.computeVertexNormals();
+    scene.add(new THREE.Mesh(sg, MAT.concrete));
+    const o = reg('site-walk', 'Front sidewalk', 'Meandering 4\' broom-finish walk, ramps 18" from the drive up to the porch, no steps', 'site'); o.in3d = true;
+    m.userData.id = 'site-walk';
   }
-  // beds: one strip per run of shrubs
-  keep.sort((a, b) => a.z - b.z || a.x - b.x);
-  for (let i = 0; i < keep.length;) { let j = i; while (j + 1 < keep.length && Math.abs(keep[j + 1].z - keep[i].z) < .1 && keep[j + 1].x - keep[j].x < 4.5) j++;
-    const xa = keep[i].x - 3, xb = keep[j].x + 3, bed = new THREE.Mesh(new THREE.PlaneGeometry(xb - xa, 5.4), mulch); bed.rotation.x = -Math.PI / 2; bed.position.set((xa + xb) / 2, -.44, keep[i].z); bed.receiveShadow = true; bed.userData.id = 'site'; bed.userData.base = mulch; scene.add(bed); sitePick.push(bed); i = j + 1; }
-  const per = MOBILE ? 26 : 70, shrubs = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.5, 1.5), leafMat, keep.length * per);
-  keep.forEach((c0, k) => { const R = 1.6 + r() * .5, c = c0.clone().setY(R * .75 - .5);
-    for (let i = 0; i < per; i++) { const u = r() * 2 - 1, ph = r() * Math.PI * 2, rr = R * (.55 + .45 * Math.cbrt(r())), q = Math.sqrt(1 - u * u);
-      dummy.position.set(c.x + Math.cos(ph) * q * rr, Math.max(-.2, c.y + u * rr * .8), c.z + Math.sin(ph) * q * rr);
-      dummy.lookAt(dummy.position.clone().sub(c).multiplyScalar(2).add(c)); dummy.rotateZ(r() * 6.28); dummy.updateMatrix(); shrubs.setMatrixAt(k * per + i, dummy.matrix);
-      col.setHSL(.27 + r() * .05, .3 + r() * .15, .3 + r() * .14); shrubs.setColorAt(k * per + i, col); } });
-  shrubs.customDepthMaterial = leafDepth; shrubs.castShadow = shrubs.receiveShadow = true; if (keep.length) scene.add(shrubs); }
+  // plant materials: alpha-cut cards tinted per instance
+  const canvasTex = (S, draw) => { const c = document.createElement('canvas'); c.width = c.height = S; draw(c.getContext('2d'), S); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = ANISO; return t; };
+  const bladeTex = canvasTex(64, (g, S) => { const gr = g.createLinearGradient(0, S, 0, 0); gr.addColorStop(0, '#cfcfcf'); gr.addColorStop(1, '#ffffff'); g.fillStyle = gr;
+    for (let k = 0; k < 3; k++) { const x = S * (0.2 + 0.3 * k); g.beginPath(); g.moveTo(x - 3, S); g.quadraticCurveTo(x - 1, S * .4, x + (k - 1) * 6, 0); g.quadraticCurveTo(x + 1, S * .4, x + 3, S); g.fill(); } });
+  const flowerTex = canvasTex(64, (g, S) => { const rr = rng(5); for (let k = 0; k < 7; k++) { const x = 8 + rr() * 48, y = 8 + rr() * 48, s = 3 + rr() * 3; g.fillStyle = '#ffffff';
+    for (let p = 0; p < 5; p++) { const a = p / 5 * Math.PI * 2; g.beginPath(); g.arc(x + Math.cos(a) * s * .8, y + Math.sin(a) * s * .8, s * .6, 0, 7); g.fill(); } g.fillStyle = '#e8c860'; g.beginPath(); g.arc(x, y, s * .45, 0, 7); g.fill(); } });
+  const plumeTex = canvasTex(64, (g, S) => { const rr = rng(8); for (let k = 0; k < 260; k++) { const a = rr() * 7, d = Math.sqrt(rr()) * 28; g.fillStyle = `rgba(255,255,255,${0.5 + rr() * .5})`; g.fillRect(32 + Math.cos(a) * d, 32 + Math.sin(a) * d * 1.3, 1.6, 1.6); } });
+  const bladeMat = new THREE.MeshStandardMaterial({ map: bladeTex, alphaTest: .4, side: THREE.DoubleSide, roughness: .85 });
+  const flowerMat = new THREE.MeshStandardMaterial({ map: flowerTex, alphaTest: .45, side: THREE.DoubleSide, roughness: .7 });
+  const plumeMat = new THREE.MeshStandardMaterial({ map: plumeTex, alphaTest: .35, side: THREE.DoubleSide, roughness: .9 });
+  const bladeGeo = new THREE.PlaneGeometry(1, 1); bladeGeo.translate(0, 0.5, 0);
+  const cards = [], blades = [], flowers = [], plumes = [], stalks = [];
+  const hsl = (h, s, l) => new THREE.Color().setHSL(h, s, l);
+  // species: [mound cards, card size, foliage colour fn, flowers, flower colour] or grass/yucca recipes; heights/radii come from the site file
+  const SPEC = {
+    yaupon_upright: { n: 240, cs: .85, leaf: () => hsl(.27 + r() * .03, .42, .17 + r() * .08), shape: 'column' },
+    yaupon_dwarf: { n: 50, cs: .6, leaf: () => hsl(.27 + r() * .03, .45, .19 + r() * .08) },
+    texas_sage: { n: 64, cs: .7, leaf: () => hsl(.2 + r() * .05, .12, .52 + r() * .12), fl: 34, fc: () => hsl(.78, .45, .62 + r() * .1) },
+    salvia: { n: 34, cs: .5, leaf: () => hsl(.28, .4, .26 + r() * .08), fl: 36, fc: () => hsl(.99, .8, .45 + r() * .08) },
+    blackfoot: { n: 20, cs: .34, leaf: () => hsl(.28, .35, .3 + r() * .06), fl: 30, fc: () => hsl(.15, .1, .96) },
+    damianita: { n: 22, cs: .3, leaf: () => hsl(.24, .45, .22 + r() * .06), fl: 34, fc: () => hsl(.13, .9, .55) },
+    bluestem: { grass: 70, bw: .07, leaf: () => r() < .6 ? hsl(.42 + r() * .06, .22, .5 + r() * .1) : hsl(.06 + r() * .04, .45, .45 + r() * .1) },
+    feathergrass: { grass: 90, bw: .05, droop: .55, leaf: () => hsl(.14 + r() * .03, .45, .68 + r() * .1) },
+    muhly: { grass: 60, bw: .06, leaf: () => hsl(.27, .3, .35 + r() * .08), plume: 34, pc: () => hsl(.92 + r() * .03, .55, .7 + r() * .08) },
+    red_yucca: { yucca: 34 },
+  };
+  const plants = SITE.plants || [];
+  for (const [kind, x, y, sc, rot] of plants)
+  {
+    const z0 = groundAt(x, y), base = new THREE.Vector3(x, z0, -y), S = SPEC[kind];
+    if (kind === 'boulder') {   // weathered limestone boulder
+      const g = new THREE.IcosahedronGeometry(1, 2), p = g.attributes.position;
+      for (let i = 0; i < p.count; i++) { const v = new THREE.Vector3().fromBufferAttribute(p, i), f = 1 + (Math.sin(v.x * 4.1 + rot) + Math.cos(v.y * 3.3 - rot) + Math.sin(v.z * 5.2)) * .07; p.setXYZ(i, v.x * f * 1.7 * sc, Math.max(-0.3, v.y) * f * 0.9 * sc, v.z * f * 1.3 * sc); }
+      g.computeVertexNormals(); const m = new THREE.Mesh(g, std({ color: 0xcdc3ad, roughness: .95 })); m.position.copy(base).add(new THREE.Vector3(0, .25, 0)); m.rotation.y = rot; m.castShadow = m.receiveShadow = true; scene.add(m); continue;
+    }
+    if (!S) continue;
+    if (S.yucca) {               // red yucca: arching strap leaves and coral flower stalks
+      for (let i = 0; i < S.yucca; i++) { const a = rot + i * 2.4, lean = .35 + r() * .55; dummy.position.copy(base); dummy.rotation.set(0, 0, 0); dummy.rotateY(a); dummy.rotateX(lean); dummy.scale.set(.16 * sc, (1.8 + r() * .8) * sc, 1); dummy.updateMatrix(); blades.push([dummy.matrix.clone(), hsl(.24, .25, .3 + r() * .08)]); }
+      for (let k = 0; k < 4; k++) { const a = rot + k * 1.7, lean = .12 + r() * .15, h = (4 + r() * 1.2) * sc; dummy.position.copy(base); dummy.rotation.set(0, 0, 0); dummy.rotateY(a); dummy.rotateX(lean); dummy.scale.set(.06, h, 1); dummy.updateMatrix(); blades.push([dummy.matrix.clone(), hsl(.97, .45, .32)]);
+        const dir = new THREE.Vector3(0, 1, 0).applyEuler(new THREE.Euler(lean, a, 0, 'YXZ'));
+        for (let b = 0; b < 9; b++) { dummy.position.copy(base).addScaledVector(dir, h * (0.55 + b * .05)); dummy.rotation.set(0, r() * 6, 0); dummy.scale.setScalar(.35); dummy.updateMatrix(); flowers.push([dummy.matrix.clone(), hsl(.0, .75, .55)]); } }
+      continue;
+    }
+    if (S.grass) {               // ornamental grass clump: tapered blades fanning out, plumes for muhly
+      const H = (kind === 'feathergrass' ? 1.5 : kind === 'muhly' ? 1.8 : 2.4) * sc;
+      for (let i = 0; i < S.grass; i++) { const a = r() * 6.28, lean = (S.droop || .25) * Math.sqrt(r()); dummy.position.copy(base).add(new THREE.Vector3(Math.cos(a) * .25 * r(), 0, Math.sin(a) * .25 * r())); dummy.rotation.set(0, 0, 0); dummy.rotateY(a); dummy.rotateX(lean); dummy.scale.set(S.bw * 3, H * (0.7 + r() * .4), 1); dummy.updateMatrix(); blades.push([dummy.matrix.clone(), S.leaf()]); }
+      if (S.plume) for (let i = 0; i < S.plume; i++) { const a = r() * 6.28, d = r() * 1.2 * sc; dummy.position.copy(base).add(new THREE.Vector3(Math.cos(a) * d, H * (0.95 + r() * .7), Math.sin(a) * d)); dummy.rotation.set(0, r() * 6.28, 0); dummy.scale.setScalar(1.1 * sc); dummy.updateMatrix(); plumes.push([dummy.matrix.clone(), S.pc()]); }
+      continue;
+    }
+    // evergreen / flowering mounds and the columnar yaupon: outward-facing leaf cards on an ellipsoid, blossoms on the surface
+    const R = (kind === 'yaupon_upright' ? 2.3 : kind === 'texas_sage' ? 2.0 : kind === 'yaupon_dwarf' ? 1.6 : kind === 'salvia' ? 1.3 : 0.9) * sc;
+    const Hh = (kind === 'yaupon_upright' ? 9 : kind === 'texas_sage' ? 4 : kind === 'yaupon_dwarf' ? 2.6 : kind === 'salvia' ? 2.3 : 0.9) * sc;
+    const c = base.clone().add(new THREE.Vector3(0, S.shape === 'column' ? Hh * .55 : Hh * .42, 0));
+    const pt = (rad) => { const u = S.shape === 'column' ? r() * 2 - 1 : r() * 1.4 - .4, ph = r() * 6.28, q = Math.sqrt(Math.max(0, 1 - u * u)); return new THREE.Vector3(c.x + Math.cos(ph) * q * R * rad, c.y + u * (S.shape === 'column' ? Hh * .48 : Hh * .6) * rad, c.z + Math.sin(ph) * q * R * rad); };
+    for (let i = 0; i < S.n; i++) { dummy.position.copy(pt(.55 + .45 * Math.cbrt(r()))); dummy.position.y = Math.max(dummy.position.y, z0 + S.cs * .3); dummy.scale.setScalar(S.cs * 1.6 * sc); dummy.lookAt(dummy.position.clone().sub(c).multiplyScalar(2).add(c)); dummy.rotateZ(r() * 6.28); dummy.updateMatrix(); cards.push([dummy.matrix.clone(), S.leaf()]); }
+    if (S.fl) for (let i = 0; i < S.fl; i++) { dummy.position.copy(pt(1.02)); dummy.position.y = Math.max(dummy.position.y, z0 + .2); dummy.scale.setScalar(.55 * sc); dummy.lookAt(dummy.position.clone().sub(c).multiplyScalar(2).add(c)); dummy.updateMatrix(); flowers.push([dummy.matrix.clone(), S.fc()]); }
+  }
+  const inst = (list, geo, mat, shadow) => { if (!list.length) return; const im = new THREE.InstancedMesh(geo, mat, list.length); list.forEach(([m, c], i) => { im.setMatrixAt(i, m); im.setColorAt(i, c); });
+    im.castShadow = shadow; im.receiveShadow = true; im.frustumCulled = false; if (shadow) im.customDepthMaterial = leafDepth; scene.add(im); };
+  inst(cards, new THREE.PlaneGeometry(1, 1), leafMat, true); inst(blades, bladeGeo, bladeMat, false); inst(flowers, new THREE.PlaneGeometry(1, 1), flowerMat, false); inst(plumes, new THREE.PlaneGeometry(1, 1), plumeMat, false);
+  const o = reg('site-beds', 'Front planting beds', 'Drought-tolerant North Texas natives: yaupon holly, Texas sage, autumn sage, gulf muhly, little bluestem, Mexican feathergrass, red yucca, blackfoot daisy, damianita, desert willow; limestone boulders', 'site'); o.in3d = true;
+}
 scene.add(new THREE.HemisphereLight(0xcfdcea, 0x5d5a3c, .35));
 const sun = new THREE.DirectionalLight(0xfff0d8, 3.1); sun.castShadow = true; sun.shadow.mapSize.set(MOBILE ? 2048 : 4096, MOBILE ? 2048 : 4096); sun.shadow.bias = -.0003; sun.shadow.normalBias = .5; sun.shadow.radius = 3;
 Object.assign(sun.shadow.camera, MOBILE ? { left: -190, right: 190, top: 190, bottom: -190, near: 10, far: 800 } : { left: -260, right: 260, top: 260, bottom: -260, near: 10, far: 900 }); sun.position.set(center.x - 160, 190, center.z + 200); sun.target.position.copy(center); scene.add(sun, sun.target);
@@ -490,7 +566,7 @@ function applySky() { needsRender = true; if (svg.firstChild) drawPlan(); }
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applySky);
 const cams = {
   front: () => [M3(16, -108, 8), M3(16, -10, 10)], entry: () => [M3(36, -85, 7), M3(16, -36, 10)], left: () => [M3(-128, -26, 9), M3(-40, -6, 8)],
-  right: () => [M3(170, 5, 14), M3(20, 0, 10)], rear: () => [M3(10, 165, 16), M3(10, 0, 10)], site: () => [M3(-420, -330, 360), M3(-30, -40, 0)], aerial: () => MOBILE ? [M3(-62, -118, 80), M3(4, -8, 4)] : [M3(-95, -160, 105), M3(0, -5, 4)] };
+  right: () => [M3(170, 5, 14), M3(20, 0, 10)], rear: () => [M3(10, 165, 16), M3(10, 0, 10)], site: () => [M3(-420, -330, 360), M3(-30, -40, 0)], walk: () => [M3(-106, -40, 6.0), M3(-12, -34, 1.0)], aerial: () => MOBILE ? [M3(-62, -118, 80), M3(4, -8, 4)] : [M3(-95, -160, 105), M3(0, -5, 4)] };
 let tween = null;
 // slide a preset camera toward its target until it is out of every real tree crown (and its eye stays above the terrain)
 function clearCam(p, t) { const q = p.clone(), dir = t.clone().sub(p); const len = dir.length(); dir.normalize();
