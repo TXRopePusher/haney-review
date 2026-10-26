@@ -231,7 +231,7 @@ import { Sky } from 'three/addons/objects/Sky.js';
 
 // ================= feedback store: a private GitHub repo, one JSON file per comment =================
 const STORE = { owner: 'TXRopePusher', repo: 'haney-feedback', branch: 'main' };
-const KEY = '17a7e2a3438a21098473f7a350c2eff9', SEALED = 'Vl4VXxBQPkNVR2dQA3B/cm5xAGpWdVRRbFUmQDwpH3hjaFlkNWsoY3UDVVFhW0pgDHpweilaGXReSQdzPzdWSmliAgctXAJnd3dAM0JjdmFvAgVmUHYkdmZnJgo8';
+const KEY = '402204d23886b7d438002d65cef9dea0', SEALED = 'U1lGWkVWO0JSTGcHU3Yrf2V9B2kCJgNXOgAjSz0qGHFmbwphYG0tYnIIVQYxXR5tB3Z3eX0JTnIIHAJ4PjRRQ2xlUQJ4WgdmcHxAZBJlImxkDgJlBCVzcDAyIwE9';
 const TOKEN = (() => { const b = atob(SEALED), k = KEY; let s = ''; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b.charCodeAt(i) ^ k.charCodeAt(i % k.length)); return s; })();
 const API = `https://api.github.com/repos/${STORE.owner}/${STORE.repo}/contents/`;
 const H = (extra) => ({ Authorization: 'Bearer ' + TOKEN, 'X-GitHub-Api-Version': '2022-11-28', ...extra });
@@ -245,8 +245,8 @@ async function listDir(path) {
   const r = await fetch(API + path + '?ref=' + STORE.branch + '&_=' + Date.now(), { headers: H({ Accept: 'application/vnd.github+json' }), cache: 'no-store' });
   if (r.status === 404) return []; if (!r.ok) throw new Error('load failed (' + r.status + ')'); return r.json();
 }
-async function getRaw(path, asBlob) {
-  const r = await fetch(API + path + '?ref=' + STORE.branch, { headers: H({ Accept: 'application/vnd.github.raw' }), cache: 'force-cache' });
+async function getRaw(path, asBlob, fresh) {   // comment files never change, so cache them; status files must be re-read
+  const r = await fetch(API + path + '?ref=' + STORE.branch, { headers: H({ Accept: 'application/vnd.github.raw' }), cache: fresh ? 'no-cache' : 'force-cache' });
   if (!r.ok) throw new Error('load failed (' + r.status + ')'); return asBlob ? r.blob() : r.json();
 }
 const imgCache = new Map();
@@ -260,7 +260,7 @@ const uid = () => new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14) 
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } };
 
 // ================= model data =================
-const BUILD = '20261025205047';   // stamped by publish.py so phones and browsers never mix cached files from different builds
+const BUILD = '20261025205133';   // stamped by publish.py so phones and browsers never mix cached files from different builds
 const DATA = await (await fetch('data.json?b=' + BUILD)).json();
 // real site: USGS 3DEP lidar terrain, USDA NAIP imagery, existing structures and trees (built by geo_build.py)
 const SITE = await fetch('site.json?b=' + BUILD).then(r => r.ok ? r.json() : null).catch(() => null);
@@ -811,7 +811,7 @@ async function sync() { if (syncing || document.hidden) return; syncing = true;
   try { const files = (await listDir('comments')).filter(f => f.name.endsWith('.json')); const known = new Set(comments.map(c => c.id + '.json')); const fresh = files.filter(f => !known.has(f.name));
     const recs = await Promise.all(fresh.map(f => getRaw('comments/' + f.name).catch(() => null))); let added = false;
     for (const r of recs) if (r && r.id && !comments.some(c => c.id === r.id)) { comments.push(r); added = true; }
-    let rs = null; try { rs = await getRaw('status/resolved.json'); } catch {}
+    let rs = null; try { rs = await getRaw('status/resolved.json', false, true); } catch {}
     const nr = new Set((rs && rs.resolved) || []), changed = nr.size !== resolved.size || [...nr].some(x => !resolved.has(x)); if (changed) resolved = nr;
     if (added) comments.sort((a, b) => a.created.localeCompare(b.created));
     if (added || changed) renderAll(); }
