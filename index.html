@@ -231,7 +231,7 @@ import { Sky } from 'three/addons/objects/Sky.js';
 
 // ================= feedback store: a private GitHub repo, one JSON file per comment =================
 const STORE = { owner: 'TXRopePusher', repo: 'haney-feedback', branch: 'main' };
-const KEY = 'b3c9a37955510e267d09763347ac2f4a', SEALED = 'BVoXURRRaElUQWoAASR9fWEhB2AHdAZRbVIkEWspTSAwbFtqMWp+aXQFWAFjD0hvAyp3cHhbS3RfTgUiaDcEEjpmAAkpXVRtdnFNY0A3dG5gUgJsAXd2dmdgJFtr';
+const KEY = '0792e267c09b38c0c12a629f83b802f9', SEALED = 'V15NWhBQaUcCRGZTAnksezV0BTgGcAwEYVYnSml9H3hiaAFhNWt/ZyIAVFJgUhlpV391KHlfQSFTSgZ5amNWSmhiWgItXFVjIHRBMENqJWg0BwA0AHN8I2tkJwBp';
 const TOKEN = (() => { const b = atob(SEALED), k = KEY; let s = ''; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b.charCodeAt(i) ^ k.charCodeAt(i % k.length)); return s; })();
 const API = `https://api.github.com/repos/${STORE.owner}/${STORE.repo}/contents/`;
 const H = (extra) => ({ Authorization: 'Bearer ' + TOKEN, 'X-GitHub-Api-Version': '2022-11-28', ...extra });
@@ -260,7 +260,7 @@ const uid = () => new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14) 
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } };
 
 // ================= model data =================
-const BUILD = '20261025181547';   // stamped by publish.py so phones and browsers never mix cached files from different builds
+const BUILD = '20261025203944';   // stamped by publish.py so phones and browsers never mix cached files from different builds
 const DATA = await (await fetch('data.json?b=' + BUILD)).json();
 // real site: USGS 3DEP lidar terrain, USDA NAIP imagery, existing structures and trees (built by geo_build.py)
 const SITE = await fetch('site.json?b=' + BUILD).then(r => r.ok ? r.json() : null).catch(() => null);
@@ -311,7 +311,8 @@ const MAT = {
   glass: new THREE.MeshPhysicalMaterial({ color: 0x24333d, roughness: .04, metalness: .05, clearcoat: 1, clearcoatRoughness: .02, envMapIntensity: 3.2, side: THREE.DoubleSide }),
   frame: std({ color: 0x1c1c1c, roughness: .4, metalness: .2 }), wood: std({ color: 0x4f2e1b, roughness: .42 }), metal: std({ color: 0x8c8c88, roughness: .32, metalness: .75 }),
   garage: std({ color: 0xece6d6, roughness: .42, metalness: .15 }), cedar: std({ ...maps('cedar', false), normalScale: V2(.5) }),   /* stained cedar carriage doors */ concrete: std({ ...maps('conc', false), normalScale: V2(.6), color: 0xc4c2bc, roughnessMap: null, roughness: .93 }),   /* broom finish: matte */
-  interior: std({ color: 0xd9d4ca, roughness: .9 }), post: std({ color: 0x7a4e2c, roughness: .7 }) };
+  interior: std({ color: 0xd9d4ca, roughness: .9 }), post: std({ color: 0x7a4e2c, roughness: .7 }),
+  tg: std({ map: (() => { const t = loader.load(`tex/tg_col_1024.jpg?b=${BUILD}`, () => { needsRender = true; }); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = ANISO; t.colorSpace = THREE.SRGBColorSpace; return t; })(), roughness: .55 }) };   // 1x6 T&G soffit boards, door stain
 const decorCache = new Map();
 const wickerTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); g.fillStyle = '#8a6a48'; g.fillRect(0, 0, 128, 128);
   for (let y = 0; y < 128; y += 8) for (let x = 0; x < 128; x += 16) { const o = (y / 8) % 2 ? 8 : 0; g.fillStyle = '#b08a60'; g.fillRect((x + o) % 128, y + 1, 12, 6); g.fillStyle = '#6e5238'; g.fillRect((x + o + 12) % 128, y, 3, 8); }
@@ -321,11 +322,13 @@ function decorMat(n, c) {   // porch furnishings: colour from the Revit material
   const color = new THREE.Color().setRGB(c[0] / 255, c[1] / 255, c[2] / 255, THREE.SRGBColorSpace); let m, uv = 0;
   if (n.includes('glow')) m = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.4, roughness: .3, side: THREE.DoubleSide });
   else if (n.includes('iron')) m = std({ color: 0x1b1b1b, metalness: .55, roughness: .45 });
+  else if (n.includes('door stain')) { m = MAT.wood; }
   else if (n.includes('wicker')) { m = std({ map: wickerTex, roughness: .85 }); uv = 0.6; }
   else m = std({ color, roughness: n.includes('teak') || n.includes('walnut') ? .55 : .95 });
   const r = { m, uv }; decorCache.set(n, r); return r; }
 function pick(name, cat, color) { const n = name.toLowerCase();
   if (n.startsWith('decor - ') && color) return decorMat(n, color);
+  if (n.includes('tongue')) return { m: MAT.tg, uv: 3.67 };
   if (n.includes('stone')) return { m: MAT.stone, uv: 4.4 }; if (n.includes('shingle')) return { m: MAT.roof, uv: 6.6 }; if (cat === 'roof') return { m: MAT.fascia };
   if (n.includes('soffit')) return { m: MAT.fascia }; if (n.includes('glass')) return { m: MAT.glass }; if (n.includes('cedar')) return { m: MAT.cedar, uv: 3.2 }; if (n.includes('clad')) return { m: MAT.frame }; if (n.includes('cherry') || n.includes('stained')) return { m: MAT.wood };
   if (n.includes('aluminum')) return { m: MAT.metal }; if (n.includes('ivory') || (n === 'default' && cat === 'door')) return { m: MAT.garage }; if (n.includes('concrete')) return { m: MAT.concrete, uv: 6.56 };
