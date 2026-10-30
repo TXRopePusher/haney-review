@@ -260,7 +260,7 @@ const uid = () => new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14) 
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } };
 
 // ================= model data =================
-const BUILD = '20261029192555';   // stamped by publish.py so phones and browsers never mix cached files from different builds
+const BUILD = '20261029194928';   // stamped by publish.py so phones and browsers never mix cached files from different builds
 const DATA = await (await fetch('data.json?b=' + BUILD)).json();
 // real site: USGS 3DEP lidar terrain, USDA NAIP imagery, existing structures and trees (built by geo_build.py)
 const SITE = await fetch('site.json?b=' + BUILD).then(r => r.ok ? r.json() : null).catch(() => null);
@@ -623,10 +623,36 @@ function drawPlan() {
   for (const o of P.openings) { const g = el('g', { 'data-id': o.id, class: 'pk' }, gOpen);
     const hw = Math.max(o.w, 1.5) / 2 + .3, ht = Math.max(o.t, .5) / 2 + .6, ang = Math.atan2(-o.dy, o.dx) * 180 / Math.PI;
     el('rect', { x: o.x - hw, y: -o.y - ht, width: hw * 2, height: ht * 2, fill: 'transparent', transform: `rotate(${ang} ${o.x} ${-o.y})` }, g);
-    for (const l of o.lines) el('polyline', { points: pts(l), fill: 'none', stroke: c('--ink'), 'stroke-width': .06, 'vector-effect': 'non-scaling-stroke' }, g); }
+    drawOpening(o, g, c); }
   for (const k of P.columns) el('rect', { x: k.box[0], y: -k.box[3], width: k.box[2] - k.box[0], height: k.box[3] - k.box[1], fill: k.fire ? c('--wall-int') : c('--wall-ext'), 'data-id': k.id, class: 'pk' }, gCol);
   el('g', { id: 'planhi' }, svg);
   if (!vb) fitPlan(false); else setVB(); highlightPlan();
+}
+// door and window symbols, drawn the way a plan reads: a gap in the wall, jambs, a double glass line for windows, and the leaf
+// with its swing arc for doors (Revit's own arc gives the hinge for single doors; pairs swing in from both jambs).
+function drawOpening(o, g, c) {
+  const ux = o.dx || 1, uy = o.dy || 0, nx = o.fx ?? -uy, ny = o.fy ?? ux, hw = (o.w || 3) / 2, ht = (o.t || .5) / 2;
+  const P = (a, b) => [o.x + ux * a + nx * b, o.y + uy * a + ny * b];          // a along the wall, b across it (toward facing)
+  const S = (q) => q[0].toFixed(3) + ',' + (-q[1]).toFixed(3);
+  const line = (q0, q1, w, col, dash) => el('line', { x1: q0[0], y1: -q0[1], x2: q1[0], y2: -q1[1], stroke: col, 'stroke-width': w, 'stroke-linecap': 'round', 'vector-effect': 'non-scaling-stroke', ...(dash ? { 'stroke-dasharray': dash } : {}) }, g);
+  const arc = (h, from, to, w, col) => { const r = Math.hypot(from[0] - h[0], from[1] - h[1]); let a0 = Math.atan2(from[1] - h[1], from[0] - h[0]), a1 = Math.atan2(to[1] - h[1], to[0] - h[0]);
+    let d = a1 - a0; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; const q = [];
+    for (let i = 0; i <= 18; i++) { const t = a0 + d * i / 18; q.push(S([h[0] + r * Math.cos(t), h[1] + r * Math.sin(t)])); }
+    el('polyline', { points: q.join(' '), fill: 'none', stroke: col, 'stroke-width': w, 'vector-effect': 'non-scaling-stroke' }, g); };
+  const ink = c('--ink'), soft = c('--soft');
+  el('polygon', { points: [P(-hw, -ht - .03), P(hw, -ht - .03), P(hw, ht + .03), P(-hw, ht + .03)].map(S).join(' '), fill: c('--stage') }, g);   // gap in the wall
+  line(P(-hw, -ht), P(-hw, ht), 1.1, ink); line(P(hw, -ht), P(hw, ht), 1.1, ink);                                                            // jambs
+  if (o.kind === 'window') { line(P(-hw, -.09), P(hw, -.09), 1, ink); line(P(-hw, .09), P(hw, .09), 1, ink); line(P(-hw, -ht), P(hw, -ht), .7, soft); line(P(-hw, ht), P(hw, ht), .7, soft); return; }
+  if (o.sub === 'opening') return;
+  if (o.sub === 'overhead') { line(P(-hw, -ht - .4), P(hw, -ht - .4), 1, soft, '4 3'); line(P(-hw, ht + .4), P(hw, ht + .4), 1, soft, '4 3'); return; }
+  if (o.sub === 'sliding') { line(P(-hw, -.07), P(.15, -.07), 1.6, ink); line(P(-.15, .07), P(hw, .07), 1.6, ink); return; }
+  if (o.sub === 'double' || !(o.arcs && o.arcs.length)) {
+    const s = o.sub === 'double' ? -1 : 1, leaves = o.sub === 'double' ? [[-hw, 0], [hw, 0]] : [[-hw, hw]];                                  // pairs swing in (away from the exterior face)
+    for (const [hinge, closed] of leaves) { const len = Math.abs(closed - hinge), h = P(hinge, s * ht), end = P(hinge, s * (ht + len)); line(h, end, 1.4, ink); arc(h, P(closed, s * ht), end, .8, soft); }
+    return; }
+  for (const a of o.arcs) { const h = [a[0], a[1]], e0 = [a[3], a[4]], e1 = [a[5], a[6]];
+    const off = q => (q[0] - o.x) * nx + (q[1] - o.y) * ny, open = Math.abs(off(e0)) > Math.abs(off(e1)) ? e0 : e1, closed = open === e0 ? e1 : e0;
+    line(h, open, 1.4, ink); arc(h, closed, open, .8, soft); }
 }
 function setVB() { svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`); drawPins(); }
 function fitPlan(keep) { if (!planBounds) planBounds = planExtent(); const r = svg.getBoundingClientRect(); if (!r.width) return; const s = Math.max(planBounds.w / r.width, planBounds.h / r.height);
