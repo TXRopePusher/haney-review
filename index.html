@@ -182,7 +182,7 @@
       </div>
       <div class="controls" id="controlsWalk" hidden>
         <div class="grp"><label class="sr" for="roomsel">Go to a room</label><select id="roomsel" aria-label="Go to a room"></select></div>
-        <div class="grp"><button id="walkexit">Leave the house</button><button id="pinsbtn3" aria-pressed="true">Pins</button></div>
+        <div class="grp"><button id="walkexit">Back to 3D</button><button id="pinsbtn3" aria-pressed="true">Pins</button></div>
       </div>
       <div class="walkhint" id="walkhint" hidden></div>
       <div class="joy" id="joy" hidden><div></div></div>
@@ -275,15 +275,15 @@ const uid = () => new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14) 
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } };
 
 // ================= model data =================
-const BUILD = '20261118140443';   // stamped by publish.py so phones and browsers never mix cached files from different builds
+const BUILD = '20261118141452';   // stamped by publish.py so phones and browsers never mix cached files from different builds
 const DATA = await (await fetch('data.json?b=' + BUILD)).json();
 // real site: USGS 3DEP lidar terrain, USDA NAIP imagery, existing structures and trees (built by geo_build.py)
 const SITE = await fetch('site.json?b=' + BUILD).then(r => r.ok ? r.json() : null).catch(() => null);
 const $ = id => document.getElementById(id);
 const stage = $('stage'), canvas = $('three'), svg = $('plan'), tip = $('tip'), pinsEl = $('pins');
 const CAT = { room: 'Rooms', stone: 'Entry portico', column: 'Entry portico', slab: 'Porches', window: 'Windows', door: 'Doors', roof: 'Roofs', wall: 'Exterior walls', int: 'Interior walls', chimney: 'Fireplaces', decor: 'Porch furnishings', site: 'Site',
-  case: 'Cabinets & built-ins', plumb: 'Plumbing fixtures', appl: 'Appliances', light: 'Lighting', floor: 'Floors', ceil: 'Ceilings', stair: 'Stairs' };
-const INTERIOR = new Set(['int', 'case', 'plumb', 'appl', 'light', 'floor', 'ceil', 'stair']);
+  case: 'Cabinets & built-ins', plumb: 'Plumbing fixtures', appl: 'Appliances', light: 'Lighting', floor: 'Floors', ceil: 'Ceilings', stair: 'Stairs', elec: 'Receptacles' };
+const INTERIOR = new Set(['int', 'case', 'plumb', 'appl', 'light', 'floor', 'ceil', 'stair', 'elec']);
 const objs = new Map();
 function reg(id, label, info, cat) { const k = String(id); let o = objs.get(k); if (!o) { o = { id: k, label, info, cat }; objs.set(k, o); } return o; }
 for (const e of DATA.elements) { const o = reg(e.id, e.label, e.info, e.cat); o.in3d = true; o.c3 = e.c; }
@@ -406,7 +406,7 @@ function roofClip(base) {
     sh.fragmentShader = 'uniform sampler2D ceilMap; uniform vec4 ceilBox; varying vec3 vCeilW;\n' + sh.fragmentShader.replace('void main() {', 'void main() {\n  { vec2 q = (vec2(vCeilW.x, -vCeilW.z) - ceilBox.xy) / ceilBox.zw; if (q.x > 0.0 && q.y > 0.0 && q.x < 1.0 && q.y < 1.0) { float hc = texture2D(ceilMap, q).r; if (hc > 7.0 && vCeilW.y < hc) discard; } }');
   };
   m.customProgramCacheKey = () => 'roofclip'; clipCache.set(base, m); return m; }
-const NO_SHADOW = new Set(['light', 'floor', 'ceil', 'plumb', 'case', 'appl', 'stair']);
+const NO_SHADOW = new Set(['light', 'floor', 'ceil', 'plumb', 'case', 'appl', 'stair', 'elec']);
 for (const e of DATA.elements) {
   const g = new THREE.Group(); g.userData.id = String(e.id);
   // a hinged door's leaves hang on pivots at their hinges so the walk-through can swing them open toward the facing side
@@ -683,23 +683,41 @@ function showTip(e, id) { const o = id && objs.get(id); if (!o) { tip.hidden = t
 // First-person visit at eye level. A 2D grid of where a person can stand (house and porch slabs, minus walls, columns,
 // cabinets and fixtures from the plan) keeps the visitor out of walls; door leaves swing open within a few steps.
 const EYE = 5.4, RADIUS = .7;
-const walk = { on: false, x: 16.07, y: -25.6, yaw: Math.PI / 2, pitch: -.05, keys: new Set(), joy: null, look: null, last: 0, grid: null, hintT: 0 };
+const walk = { on: false, x: 16.07, y: -25.6, yaw: Math.PI / 2, pitch: -.05, keys: new Set(), joy: null, look: null, last: 0, grid: null, yard: null, hintT: 0, z: null };
 function buildGrid() {
   const all = P.slabs.flatMap(s => s.loops); let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
   for (const l of all) for (let i = 0; i < l.length; i += 2) { x0 = Math.min(x0, l[i]); x1 = Math.max(x1, l[i]); y0 = Math.min(y0, l[i + 1]); y1 = Math.max(y1, l[i + 1]); }
   const K = 5, W = Math.ceil((x1 - x0) * K) + 4, Hh = Math.ceil((y1 - y0) * K) + 4, c = document.createElement('canvas'); c.width = W; c.height = Hh; const g = c.getContext('2d');
   const path = l => { g.beginPath(); for (let i = 0; i < l.length; i += 2) g.lineTo((l[i] - x0) * K + 2, (y1 - l[i + 1]) * K + 2); g.closePath(); };
   g.fillStyle = '#000'; g.fillRect(0, 0, W, Hh); g.fillStyle = '#fff'; for (const l of all) { path(l); g.fill(); }
+  g.strokeStyle = '#fff'; g.lineWidth = 4; for (const l of all) { path(l); g.stroke(); }   // soft (antialiased) slab edges would read as walls where the porch meets the yard
   g.fillStyle = '#000'; for (const w of P.walls) for (const l of w.loops) { path(l); g.fill(); }
   for (const k of P.columns) g.fillRect((k.box[0] - x0) * K + 2, (y1 - k.box[3]) * K + 2, (k.box[2] - k.box[0]) * K, (k.box[3] - k.box[1]) * K);
   for (const f of P.fixtures || []) { path(f.loop); g.fill(); }
+  g.fillStyle = '#fff'; for (const o of P.openings) if (o.kind === 'door' && o.sub !== 'overhead') { const hw = o.w / 2 - .05, ht = (o.t || 1) / 2 + .35, ux = o.dx ?? 1, uy = o.dy ?? 0;
+    path([o.x - ux * hw - uy * ht, o.y - uy * hw + ux * ht, o.x + ux * hw - uy * ht, o.y + uy * hw + ux * ht, o.x + ux * hw + uy * ht, o.y + uy * hw - ux * ht, o.x - ux * hw + uy * ht, o.y - uy * hw - ux * ht]); g.fill(); }
+  g.fillStyle = '#000';
+  for (const o of P.openings) if (o.sub === 'overhead') { const hw = o.w / 2 + .2, ht = (o.t || 1) / 2 + .3, ux = o.dx ?? 1, uy = o.dy ?? 0;   // closed garage doors stay solid
+    path([o.x - ux * hw - uy * ht, o.y - uy * hw + ux * ht, o.x + ux * hw - uy * ht, o.y + uy * hw + ux * ht, o.x + ux * hw + uy * ht, o.y + uy * hw - ux * ht, o.x - ux * hw + uy * ht, o.y - uy * hw - ux * ht]); g.fill(); }
   const px = g.getImageData(0, 0, W, Hh).data; walk.grid = { x0, y1, K, W, H: Hh, ok: (x, y) => { const i = Math.round((x - x0) * K + 2), j = Math.round((y1 - y) * K + 2); return i >= 0 && j >= 0 && i < W && j < Hh && px[(j * W + i) * 4] > 128; } };
 }
-function free(x, y) { const G = walk.grid; if (!G.ok(x, y)) return false; for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; if (!G.ok(x + Math.cos(a) * RADIUS, y + Math.sin(a) * RADIUS)) return false; } return true; }
-function floorZ(x, y) { const inHouse = P.slabs.some(s => s.house && s.loops.some(l => inPoly(l, x, y))); return inHouse ? 0 : -.17; }
+// outside the slabs: the yard, 1 cell per foot for 400' around the house; tree trunks, the shed and the metal building are solid
+function buildYard() {
+  const R = 400, W = 2 * R, c = document.createElement('canvas'); c.width = c.height = W; const g = c.getContext('2d'), X = x => x + R, Y = y => R - y;
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, W); g.fillStyle = '#000';
+  for (const [mx, my] of SITE ? SITE.trees : []) { g.beginPath(); g.arc(X(mx), Y(my), 1.4, 0, 7); g.fill(); }
+  for (const st of SITE ? SITE.structures : []) if (st.wall) { const [x0, y0, x1, y1] = st.box; g.fillRect(X(x0), Y(y1), x1 - x0, y1 - y0); }
+  const px = g.getImageData(0, 0, W, W).data; walk.yard = { ok: (x, y) => { const i = Math.round(X(x)), j = Math.round(Y(y)); return i >= 0 && j >= 0 && i < W && j < W && px[(j * W + i) * 4] > 128; } };
+}
+const onSlab = (x, y) => P.slabs.some(s => s.loops.some(l => inPoly(l, x, y)));
+const okAt = (x, y) => onSlab(x, y) ? walk.grid.ok(x, y) : walk.yard.ok(x, y);
+function free(x, y) { if (!walk.yard) buildYard(); if (!okAt(x, y)) return false; for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; if (!okAt(x + Math.cos(a) * RADIUS, y + Math.sin(a) * RADIUS)) return false; } return true; }
+function floorZ(x, y) { if (P.slabs.some(s => s.house && s.loops.some(l => inPoly(l, x, y)))) return 0; if (onSlab(x, y)) return -.17; return SITE ? groundAt(x, y) : -1.67; }
+const indoors = (x, y) => P.slabs.some(s => s.house && s.loops.some(l => inPoly(l, x, y)));
 function inPoly(l, x, y) { let c = false; for (let i = 0, j = l.length - 2; i < l.length; j = i, i += 2) if ((l[i + 1] > y) !== (l[j + 1] > y) && x < (l[j] - l[i]) * (y - l[i + 1]) / (l[j + 1] - l[i + 1]) + l[i]) c = !c; return c; }
 function placeCam() {
-  const z = floorZ(walk.x, walk.y) + EYE, e = M3(walk.x, walk.y, z), cp = Math.cos(walk.pitch);
+  const zt = floorZ(walk.x, walk.y) + EYE; if (walk.z === null || Math.abs(walk.z - zt) > 3) walk.z = zt;
+  const z = walk.z, e = M3(walk.x, walk.y, z), cp = Math.cos(walk.pitch);
   camera.position.copy(e); camera.lookAt(e.x + cp * Math.cos(walk.yaw), e.y + Math.sin(walk.pitch), e.z - cp * Math.sin(walk.yaw));
   indoor.position.set(e.x, e.y + 1.2, e.z); needsRender = true; }
 const pose = () => ({ x: +walk.x.toFixed(2), y: +walk.y.toFixed(2), yaw: +walk.yaw.toFixed(3), pitch: +walk.pitch.toFixed(3) });
@@ -712,7 +730,7 @@ function enterWalk(p) {
   walk.visited = true; roofGroup.forEach(g => g.visible = true); $('roofbtn').setAttribute('aria-pressed', 'true');
   camera.near = .25; camera.far = 4000; hemi.intensity = 1.25; indoor.intensity = 26; resize();
   $('controls3d').hidden = true; $('controlsWalk').hidden = false; tabs('walk');
-  hint(MOBILE ? 'Drag on the left side to walk, anywhere else to look around. Tap anything to comment on it.' : 'Walk with the arrow keys or W A S D (Shift to hurry), drag to look around, scroll to step. Click anything to comment on it.');
+  hint(MOBILE ? 'Drag on the left side to walk, anywhere else to look around. Walk out through any door to the porches and yard. Tap anything to comment on it.' : 'Walk with the arrow keys or W A S D (Shift to hurry), drag to look around, scroll to step. Doors open as you reach them, so you can walk out onto the porches and the yard. Click anything to comment on it.');
   placeCam(); drawPins(); }
 function exitWalk(toOrbit = true) {
   if (!walk.on) return; walk.on = false; walk.keys.clear(); walk.joy = walk.look = null; $('joy').hidden = true; $('walkhint').hidden = true; canvas.classList.remove('walking');
@@ -731,11 +749,13 @@ function walkStep(now) {
     if (free(walk.x + dx, walk.y + dy)) { walk.x += dx; walk.y += dy; } else if (free(walk.x + dx, walk.y)) walk.x += dx; else if (free(walk.x, walk.y + dy)) walk.y += dy;
     moved = true; }
   for (const d of doors) { const near = Math.hypot(d.x - walk.x, d.y - walk.y) < 5.2 ? 1 : 0; if (d.open !== near) { d.open += Math.sign(near - d.open) * Math.min(Math.abs(near - d.open), dt * 2.2); d.pivots.forEach(p => p.obj.rotation.y = p.max * d.open); needsRender = true; } }
+  { const zt = floorZ(walk.x, walk.y) + EYE; if (walk.z !== null && Math.abs(walk.z - zt) > .005) { walk.z += (zt - walk.z) * Math.min(1, dt * 7); moved = true; } }   // steps and grade, eased
+  { const inside = indoors(walk.x, walk.y), want = inside ? 26 : 0, hw = inside ? 1.25 : 1.05; if (indoor.intensity !== want || hemi.intensity !== hw) { indoor.intensity = want; hemi.intensity = hw; needsRender = true; } }
   if (moved) placeCam(); }
 function stepBy(dist) { const dx = Math.cos(walk.yaw) * dist, dy = Math.sin(walk.yaw) * dist; if (free(walk.x + dx, walk.y + dy)) { walk.x += dx; walk.y += dy; placeCam(); } }
 // put the visitor a few steps from a target, with a clear line of sight to it, and face it
 function walkTo(c) {
-  if (!walk.grid) buildGrid(); const tx = c[0], ty = c[1], tz = c[2] ?? 4; let best = null;
+  if (!walk.grid) buildGrid(); walk.z = null; const tx = c[0], ty = c[1], tz = c[2] ?? 4; let best = null;
   for (const r of [4.5, 6, 8, 10.5, 13]) { for (let k = 0; k < 24; k++) { const a = k * Math.PI / 12, x = tx + Math.cos(a) * r, y = ty + Math.sin(a) * r; if (!free(x, y)) continue;
       const eye = M3(x, y, floorZ(x, y) + EYE), tgt = M3(tx, ty, tz), dir = tgt.clone().sub(eye), len = dir.length(); ray.set(eye, dir.normalize()); ray.far = len - .6;
       const blocked = ray.intersectObjects(pickables.filter(m => m.parent.visible && !(m.material.transparent)), false).length > 0; ray.far = Infinity;
@@ -747,10 +767,15 @@ function goRoom(r) {
   if (!walk.grid) buildGrid(); let x = r.x, y = r.y;
   if (!free(x, y)) { let ok = false; for (let rr = 1; rr < 9 && !ok; rr += 1) for (let k = 0; k < 16 && !ok; k++) { const a = k * Math.PI / 8; if (free(r.x + Math.cos(a) * rr, r.y + Math.sin(a) * rr)) { x = r.x + Math.cos(a) * rr; y = r.y + Math.sin(a) * rr; ok = true; } } }
   let bestA = walk.yaw, bestD = -1; for (let k = 0; k < 16; k++) { const a = k * Math.PI / 8; let d = 0; while (d < 40 && walk.grid.ok(x + Math.cos(a) * d, y + Math.sin(a) * d)) d += .5; if (d > bestD) { bestD = d; bestA = a; } }
-  Object.assign(walk, { x, y, yaw: bestA, pitch: -.08 }); if (!walk.on) enterWalk(pose()); else placeCam(); }
+  Object.assign(walk, { x, y, yaw: bestA, pitch: -.08, z: null }); if (!walk.on) enterWalk(pose()); else placeCam(); }
+const OUTSIDE = [['Outside · front walk', 16.07, -78, Math.PI / 2], ['Outside · back yard', 10, 52, -Math.PI / 2], ['Outside · garage drive', -98, -10, 0], ['Outside · bedroom side', 82, 0, Math.PI]];
 { const sel = $('roomsel'); sel.append(new Option('Go to a room…', '')); const seen = new Map();
   for (const r of [...P.rooms].sort((a, b) => a.label.localeCompare(b.label))) { const n = (seen.get(r.label) || 0) + 1; seen.set(r.label, n); sel.append(new Option(r.label + (n > 1 || P.rooms.filter(q => q.label === r.label).length > 1 ? ' · ' + r.area + ' SF' : ''), String(r.id))); }
-  sel.onchange = () => { const r = P.rooms.find(q => String(q.id) === sel.value); if (r) goRoom(r); sel.value = ''; canvas.focus(); }; }
+  const og = document.createElement('optgroup'); og.label = 'Outside'; OUTSIDE.forEach(([n], i) => og.append(new Option(n.replace('Outside · ', ''), 'out' + i))); sel.append(og);
+  sel.onchange = () => { const v = sel.value;
+    if (v.startsWith('out')) { const [, x, y, yaw] = OUTSIDE[+v.slice(3)]; Object.assign(walk, { x, y, yaw, pitch: .02, z: null }); if (!walk.on) enterWalk(pose()); else placeCam(); }
+    else { const r = P.rooms.find(q => String(q.id) === v); if (r) goRoom(r); }
+    sel.value = ''; canvas.focus(); }; }
 $('walkexit').onclick = () => { exitWalk(true); tabs('3d'); };
 const typing = () => document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
 addEventListener('keydown', e => { if (!walk.on || typing()) return; const k = e.key.toLowerCase(); if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift'].includes(k)) { walk.keys.add(k); e.preventDefault(); } });
@@ -987,7 +1012,7 @@ $('lightbox').onclick = () => $('lightbox').hidden = true;
 addEventListener('keydown', e => { if (e.key === 'Escape') { $('lightbox').hidden = true; $('finished').hidden = true; } });
 
 // ================= find =================
-const order = ['room', 'case', 'plumb', 'appl', 'light', 'stair', 'door', 'window', 'int', 'floor', 'ceil', 'stone', 'column', 'slab', 'roof', 'wall', 'chimney', 'decor'];
+const order = ['room', 'case', 'plumb', 'appl', 'light', 'elec', 'stair', 'door', 'window', 'int', 'floor', 'ceil', 'stone', 'column', 'slab', 'roof', 'wall', 'chimney', 'decor'];
 let catFilter = null;
 { const box = $('cats'); for (const g of ['All', ...new Set(order.map(c => CAT[c]))]) { const b = h('button', '', g); b.setAttribute('aria-pressed', String(g === 'All')); b.onclick = () => { catFilter = g === 'All' ? null : g; box.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); buildFind(); }; box.appendChild(b); } }
 function buildFind() {
@@ -1033,7 +1058,7 @@ renderer.setAnimationLoop(now => {
   const sig = camera.position.toArray().map(v => v.toFixed(2)).join() + camera.quaternion.toArray().map(v => v.toFixed(3)).join(); if (sig !== lastSig) { lastSig = sig; drawPins(); }
 });
 applySky(); resize(); { const [p, t] = cams.aerial(); goCam(p, t, true); }
-if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.DBG = { THREE, scene, camera, controls, M3, goCam, house, walk, doors, render: () => { needsRender = true; renderer.render(scene, camera); }, step: t => walkStep(t) };   // local preview only
+if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.DBG = { THREE, scene, camera, controls, M3, goCam, house, walk, doors, render: () => { needsRender = true; renderer.render(scene, camera); }, step: t => walkStep(t), free: (x, y) => free(x, y), okAt: (x, y) => okAt(x, y), floorZ: (x, y) => floorZ(x, y), onSlab: (x, y) => onSlab(x, y) };   // local preview only
 buildFind(); renderCompose(); renderAll(); setName(me);
 $('loading').hidden = true;
 if (!me) $('welcome').hidden = false;
