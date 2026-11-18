@@ -147,7 +147,7 @@
 <body>
 <div class="app">
   <header class="bar">
-    <div class="brand"><b>Haney Residence</b><span>Design review · Draft 6 with entry portico</span></div>
+    <div class="brand"><b>Haney Residence</b><span>Design review · Final design · plans dated 11/17/2026</span></div>
     <div class="tabs" role="tablist" aria-label="View">
       <button role="tab" aria-selected="true" data-view="3d">3D exterior</button>
       <button role="tab" aria-selected="false" data-view="plan">Floor plan</button>
@@ -260,7 +260,7 @@ const uid = () => new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14) 
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } };
 
 // ================= model data =================
-const BUILD = '20261029200315';   // stamped by publish.py so phones and browsers never mix cached files from different builds
+const BUILD = '20261118085625';   // stamped by publish.py so phones and browsers never mix cached files from different builds
 const DATA = await (await fetch('data.json?b=' + BUILD)).json();
 // real site: USGS 3DEP lidar terrain, USDA NAIP imagery, existing structures and trees (built by geo_build.py)
 const SITE = await fetch('site.json?b=' + BUILD).then(r => r.ok ? r.json() : null).catch(() => null);
