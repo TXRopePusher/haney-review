@@ -275,7 +275,7 @@ const uid = () => new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14) 
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } };
 
 // ================= model data =================
-const BUILD = '20261118141824';   // stamped by publish.py so phones and browsers never mix cached files from different builds
+const BUILD = '20261118172501';   // stamped by publish.py so phones and browsers never mix cached files from different builds
 const DATA = await (await fetch('data.json?b=' + BUILD)).json();
 // real site: USGS 3DEP lidar terrain, USDA NAIP imagery, existing structures and trees (built by geo_build.py)
 const SITE = await fetch('site.json?b=' + BUILD).then(r => r.ok ? r.json() : null).catch(() => null);
@@ -329,22 +329,22 @@ const MAT = {
   glass: new THREE.MeshPhysicalMaterial({ color: 0x24333d, roughness: .04, metalness: .05, clearcoat: 1, clearcoatRoughness: .02, envMapIntensity: 3.2, side: THREE.DoubleSide }),
   frame: std({ color: 0x1c1c1c, roughness: .4, metalness: .2 }), wood: std({ color: 0x4f2e1b, roughness: .42 }), metal: std({ color: 0x8c8c88, roughness: .32, metalness: .75 }),
   garage: std({ color: 0xece6d6, roughness: .42, metalness: .15 }), cedar: std({ ...maps('cedar', false), normalScale: V2(.5) }),   /* stained cedar carriage doors */ concrete: std({ ...maps('conc', false), normalScale: V2(.6), color: 0xc4c2bc, roughnessMap: null, roughness: .93 }),   /* broom finish: matte */
-  interior: std({ color: 0xd9d4ca, roughness: .9 }), post: std({ color: 0x7a4e2c, roughness: .7 }),
+  interior: std({ color: 0xe2d6c0, roughness: .9 }), post: std({ color: 0x7a4e2c, roughness: .7 }),
   tg: std({ map: (() => { const t = loader.load(`tex/tg_col_1024.jpg?b=${BUILD}`, () => { needsRender = true; }); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = ANISO; t.colorSpace = THREE.SRGBColorSpace; return t; })(), roughness: .55 }) };   // 1x6 T&G soffit boards, door stain
 // interior finishes: canvas textures (no downloads) for the oak plank floor, porcelain tile, subway and hex shower tile
 function canvasTex(S, draw, rep) { const c = document.createElement('canvas'); c.width = c.height = S; draw(c.getContext('2d'), S, rng(S + rep)); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = ANISO; t.colorSpace = THREE.SRGBColorSpace; return t; }
 const oakTex = canvasTex(1024, (g, S, r) => {   // 8' square: sixteen 6" planks, random lengths, light grain
-  const pw = S / 16; for (let i = 0; i < 16; i++) { let x = -r() * S * .5; while (x < S) { const L = S * (.35 + r() * .45), h = 33 + r() * 6, l = 57 + r() * 8; g.fillStyle = `hsl(${h},${24 + r() * 8}%,${l}%)`; g.fillRect(x, i * pw, L, pw);
-    for (let k = 0; k < 9; k++) { g.strokeStyle = `rgba(90,60,30,${.05 + r() * .08})`; g.lineWidth = 1 + r() * 1.5; g.beginPath(); const y = i * pw + r() * pw; g.moveTo(x, y); g.bezierCurveTo(x + L * .3, y + (r() - .5) * 8, x + L * .7, y + (r() - .5) * 8, x + L, y + (r() - .5) * 6); g.stroke(); }
-    g.fillStyle = 'rgba(60,40,20,.35)'; g.fillRect(x, i * pw, 2, pw); x += L; } g.fillStyle = 'rgba(60,40,20,.3)'; g.fillRect(0, i * pw, S, 1.5); } }, 1);
-const tileTex = canvasTex(512, (g, S, r) => { g.fillStyle = '#a8a196'; g.fillRect(0, 0, S, S);   // 4' square: 12" x 24" porcelain, offset rows
-  for (let j = 0; j < 4; j++) for (let i = -1; i < 3; i++) { const x = i * S / 2 + (j % 2) * S / 4, y = j * S / 4; g.fillStyle = `hsl(38,${10 + r() * 5}%,${73 + r() * 5}%)`; g.fillRect(x + 2, y + 2, S / 2 - 4, S / 4 - 4); } }, 2);
-const subwayTex = canvasTex(512, (g, S, r) => { g.fillStyle = '#cfcac0'; g.fillRect(0, 0, S, S);   // 2' square: 3" x 6" subway, running bond
-  for (let j = 0; j < 8; j++) for (let i = -1; i < 5; i++) { const x = i * S / 4 + (j % 2) * S / 8, y = j * S / 8; g.fillStyle = `hsl(45,${8 + r() * 4}%,${92 + r() * 4}%)`; g.fillRect(x + 2, y + 2, S / 4 - 4, S / 8 - 4); } }, 3);
-const hexTex = canvasTex(512, (g, S, r) => { g.fillStyle = '#d8d6d0'; g.fillRect(0, 0, S, S);   // 1' square: 2" gray hex mosaic
-  const R = S / 12; for (let j = -1; j < 14; j++) for (let i = -1; i < 9; i++) { const cx = i * R * 1.732 + (j % 2) * R * .866, cy = j * R * 1.5; g.beginPath(); for (let k = 0; k < 6; k++) { const a = Math.PI / 6 + k * Math.PI / 3; g.lineTo(cx + Math.cos(a) * (R - 2), cy + Math.sin(a) * (R - 2)); } g.closePath(); const l = 52 + r() * 12; g.fillStyle = `hsl(40,4%,${l}%)`; g.fill(); } }, 4);
-MAT.ceiling = std({ color: 0xf2efe8, roughness: .95 });
-MAT.oak = std({ map: oakTex, roughness: .5 }); MAT.tile = std({ map: tileTex, roughness: .32 }); MAT.subway = std({ map: subwayTex, roughness: .22 }); MAT.hex = std({ map: hexTex, roughness: .4 });
+  const pw = S / 16; for (let i = 0; i < 16; i++) { let x = -r() * S * .5; while (x < S) { const L = S * (.35 + r() * .45), h = 34 + r() * 5, l = 66 + r() * 7; g.fillStyle = `hsl(${h},${38 + r() * 10}%,${l}%)`; g.fillRect(x, i * pw, L, pw);
+    for (let k = 0; k < 9; k++) { g.strokeStyle = `rgba(120,85,45,${.04 + r() * .06})`; g.lineWidth = 1 + r() * 1.5; g.beginPath(); const y = i * pw + r() * pw; g.moveTo(x, y); g.bezierCurveTo(x + L * .3, y + (r() - .5) * 8, x + L * .7, y + (r() - .5) * 8, x + L, y + (r() - .5) * 6); g.stroke(); }
+    g.fillStyle = 'rgba(90,62,32,.25)'; g.fillRect(x, i * pw, 2, pw); x += L; } g.fillStyle = 'rgba(90,62,32,.22)'; g.fillRect(0, i * pw, S, 1.5); } }, 1);
+const tileTex = canvasTex(512, (g, S, r) => { g.fillStyle = '#c2b39b'; g.fillRect(0, 0, S, S);   // 4' square: 12" x 24" limestone-look porcelain, offset rows
+  for (let j = 0; j < 4; j++) for (let i = -1; i < 3; i++) { const x = i * S / 2 + (j % 2) * S / 4, y = j * S / 4; g.fillStyle = `hsl(37,${24 + r() * 8}%,${80 + r() * 4}%)`; g.fillRect(x + 2, y + 2, S / 2 - 4, S / 4 - 4); } }, 2);
+const subwayTex = canvasTex(512, (g, S, r) => { g.fillStyle = '#d6cab4'; g.fillRect(0, 0, S, S);   // 2' square: 3" x 6" cream handmade subway, running bond
+  for (let j = 0; j < 8; j++) for (let i = -1; i < 5; i++) { const x = i * S / 4 + (j % 2) * S / 8, y = j * S / 8; g.fillStyle = `hsl(40,${28 + r() * 10}%,${88 + r() * 4}%)`; g.fillRect(x + 2, y + 2, S / 4 - 4, S / 8 - 4); } }, 3);
+const hexTex = canvasTex(512, (g, S, r) => { g.fillStyle = '#cbbda5'; g.fillRect(0, 0, S, S);   // 1' square: 2" travertine hex mosaic
+  const R = S / 12; for (let j = -1; j < 14; j++) for (let i = -1; i < 9; i++) { const cx = i * R * 1.732 + (j % 2) * R * .866, cy = j * R * 1.5; g.beginPath(); for (let k = 0; k < 6; k++) { const a = Math.PI / 6 + k * Math.PI / 3; g.lineTo(cx + Math.cos(a) * (R - 2), cy + Math.sin(a) * (R - 2)); } g.closePath(); const l = 70 + r() * 10; g.fillStyle = `hsl(36,${22 + r() * 10}%,${l}%)`; g.fill(); } }, 4);
+MAT.ceiling = std({ color: 0xf3ecde, roughness: .95 });
+MAT.oak = std({ map: oakTex, roughness: .62 }); MAT.tile = std({ map: tileTex, roughness: .32 }); MAT.subway = std({ map: subwayTex, roughness: .22 }); MAT.hex = std({ map: hexTex, roughness: .4 });
 MAT.showerGlass = new THREE.MeshPhysicalMaterial({ color: 0xdff0f2, roughness: .03, metalness: 0, transparent: true, opacity: .16, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 1.5 });
 MAT.mirror = std({ color: 0xc9d0d4, metalness: .9, roughness: .12, envMapIntensity: .55 });
 const intCache = new Map();
@@ -642,7 +642,7 @@ scene.add(makeSky(9000));
   const gnd = new THREE.Mesh(new THREE.CircleGeometry(400, 32), new THREE.MeshBasicMaterial({ color: 0x8c876c })); gnd.rotation.x = -Math.PI / 2; gnd.position.y = -1; es.add(gnd);
   scene.environment = pm.fromScene(es, 0, .5, 1200).texture; pm.dispose(); }
 for (const m of Object.values(MAT)) if (m !== MAT.glass) m.envMapIntensity = .85;
-grassMat.envMapIntensity = .35; groundMat.envMapIntensity = .3; outerMat.envMapIntensity = .3; leafMat.envMapIntensity = .4;
+MAT.oak.envMapIntensity = .3; MAT.interior.envMapIntensity = .3; MAT.ceiling.envMapIntensity = .3; MAT.tile.envMapIntensity = .4;   // interior finishes: keep the blue sky out of the beige groundMat.envMapIntensity = .3; outerMat.envMapIntensity = .3; leafMat.envMapIntensity = .4;
 scene.fog = new THREE.Fog(0xcdd8e1, 900, 7000);
 function applySky() { needsRender = true; if (svg.firstChild) drawPlan(); }
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applySky);
