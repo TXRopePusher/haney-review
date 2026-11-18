@@ -275,7 +275,7 @@ const uid = () => new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14) 
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } };
 
 // ================= model data =================
-const BUILD = '20261118122424';   // stamped by publish.py so phones and browsers never mix cached files from different builds
+const BUILD = '20261118135637';   // stamped by publish.py so phones and browsers never mix cached files from different builds
 const DATA = await (await fetch('data.json?b=' + BUILD)).json();
 // real site: USGS 3DEP lidar terrain, USDA NAIP imagery, existing structures and trees (built by geo_build.py)
 const SITE = await fetch('site.json?b=' + BUILD).then(r => r.ok ? r.json() : null).catch(() => null);
@@ -393,6 +393,19 @@ function planarUV(pos, tile) { const uv = new Float32Array(pos.length / 3 * 2), 
     [a, b, c].forEach((p, k) => { const j = (i / 3 + k) * 2; uv[j] = p.dot(u) / tile; uv[j + 1] = p.dot(v) / tile; }); } return uv; }
 const house = new THREE.Group(); scene.add(house);
 const pickables = [], roofGroup = [], doors = [];
+// roof surfaces never show inside a room: the export's ceiling-height map (0.25' cells) lets the roof shader drop any fragment
+// below the ceiling of the room it sits over (the roofs overlap inside the attic, and a few dip below the ceilings).
+const CM = P.ceilmap, ceilTex = (() => { if (!CM) return null; const raw = atob(CM.data), b = new Uint8Array(raw.length); for (let i = 0; i < raw.length; i++) b[i] = raw.charCodeAt(i);
+  const t = new THREE.DataTexture(new Uint16Array(b.buffer), CM.w, CM.h, THREE.RedFormat, THREE.HalfFloatType); t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true; return t; })();   // heights in feet, sampled smoothly so slopes cut cleanly
+const clipCache = new Map();
+function roofClip(base) {
+  if (!ceilTex || base === MAT.glass) return base; if (clipCache.has(base)) return clipCache.get(base);
+  const m = base.clone(); m.onBeforeCompile = sh => {
+    sh.uniforms.ceilMap = { value: ceilTex }; sh.uniforms.ceilBox = { value: new THREE.Vector4(CM.x0, CM.y0, CM.w * CM.step, CM.h * CM.step) };
+    sh.vertexShader = 'varying vec3 vCeilW;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n  vCeilW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = 'uniform sampler2D ceilMap; uniform vec4 ceilBox; varying vec3 vCeilW;\n' + sh.fragmentShader.replace('void main() {', 'void main() {\n  { vec2 q = (vec2(vCeilW.x, -vCeilW.z) - ceilBox.xy) / ceilBox.zw; if (q.x > 0.0 && q.y > 0.0 && q.x < 1.0 && q.y < 1.0) { float hc = texture2D(ceilMap, q).r; if (hc > 7.0 && vCeilW.y < hc) discard; } }');
+  };
+  m.customProgramCacheKey = () => 'roofclip'; clipCache.set(base, m); return m; }
 const NO_SHADOW = new Set(['light', 'floor', 'ceil', 'plumb', 'case', 'appl', 'stair']);
 for (const e of DATA.elements) {
   const g = new THREE.Group(); g.userData.id = String(e.id);
@@ -404,7 +417,8 @@ for (const e of DATA.elements) {
     for (let i = 0; i < src.length; i += 3) { pos[i] = src[i] / 100; pos[i + 1] = src[i + 2] / 100; pos[i + 2] = -src[i + 1] / 100; if (o) { pos[i] -= o.x; pos[i + 2] -= o.z; } }
     const ch = pick(DATA.materials[part.m].name, e.cat, DATA.materials[part.m].color), geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); if (ch.uv) geo.setAttribute('uv', new THREE.BufferAttribute(planarUV(pos, ch.uv), 2)); geo.computeVertexNormals();
-    const m = new THREE.Mesh(geo, ch.m); m.castShadow = ch.m !== MAT.glass && ch.m !== MAT.showerGlass && !NO_SHADOW.has(e.cat); m.receiveShadow = true; m.userData.id = g.userData.id; m.userData.base = ch.m;
+    const mat = e.cat === 'roof' ? roofClip(ch.m) : ch.m;
+    const m = new THREE.Mesh(geo, mat); m.castShadow = ch.m !== MAT.glass && ch.m !== MAT.showerGlass && !NO_SHADOW.has(e.cat); m.receiveShadow = true; m.userData.id = g.userData.id; m.userData.base = mat;
     (pv ? pv.obj : g).add(m); pickables.push(m);
   }
   house.add(g); if (e.cat === 'roof' || e.cat === 'ceil') roofGroup.push(g);
@@ -647,7 +661,8 @@ $('roofbtn').onclick = () => { const on = $('roofbtn').getAttribute('aria-presse
 const togglePins = () => { showPins = !showPins; ['pinsbtn', 'pinsbtn2', 'pinsbtn3'].forEach(i => $(i).setAttribute('aria-pressed', String(showPins))); drawPins(); };
 $('pinsbtn').onclick = togglePins; $('pinsbtn2').onclick = togglePins; $('pinsbtn3').onclick = togglePins;
 const hiCache = new Map();
-function hiMat(base, strong) { const k = base.uuid + strong; if (!hiCache.has(k)) { const m = base.clone(); m.emissive = new THREE.Color(strong ? 0xb36a2a : 0x8a6a3a); m.emissiveIntensity = strong ? .55 : .28; hiCache.set(k, m); } return hiCache.get(k); }
+function hiMat(base, strong) { const k = base.uuid + strong; if (!hiCache.has(k)) { const m = base.clone(); m.emissive = new THREE.Color(strong ? 0xb36a2a : 0x8a6a3a); m.emissiveIntensity = strong ? .55 : .28;
+    if ([...clipCache.values()].includes(base)) { m.onBeforeCompile = base.onBeforeCompile; m.customProgramCacheKey = () => 'roofclip-hi'; } hiCache.set(k, m); } return hiCache.get(k); }
 let hoverId = null;
 function highlight3d() { needsRender = true; for (const m of pickables) { const id = m.userData.id; m.material = selected && id === selected.id ? hiMat(m.userData.base, true) : id === hoverId ? hiMat(m.userData.base, false) : m.userData.base; } }
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
