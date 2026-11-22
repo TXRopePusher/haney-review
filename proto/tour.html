@@ -116,7 +116,7 @@ cv.addEventListener('pointermove', e => {
     const h = rc.intersectObjects(markers.children, true)[0]; markers.children.forEach(g => g.children[0].material = h && h.object.userData.id === g.userData.id ? hotMat : discMat);
     cv.style.cursor = h ? 'pointer' : 'grab'; renderer.render(scene, camera); return; }
   const p = pts.get(e.pointerId); moved += Math.abs(e.clientX - p[0]) + Math.abs(e.clientY - p[1]);
-  if (pts.size === 1) { const k = fov / innerHeight; lon -= (e.clientX - p[0]) * k; lat += (e.clientY - p[1]) * k; }
+  if (pts.size === 1) { const k = fov / innerHeight * (e.pointerType === 'mouse' ? 1 : 2); lon -= (e.clientX - p[0]) * k; lat += (e.clientY - p[1]) * k; }
   pts.set(e.pointerId, [e.clientX, e.clientY]);
   if (pts.size === 2) { const [a, b] = [...pts.values()]; fov = fov0 * pinch0 / Math.max(1, Math.hypot(a[0] - b[0], a[1] - b[1])); }
   draw(); });
