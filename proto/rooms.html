@@ -30,7 +30,7 @@
 <script type="module">
 import * as THREE from 'three';
 const ROOMS = [['family', 'Family room'], ['kitchen', 'Kitchen'], ['foyer', 'Foyer'], ['mbed', 'Master bedroom'], ['mbath', 'Master bath'], ['porch', 'Back porch']];
-const V = '2';
+const V = '3';
 const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.prepend(renderer.domElement);
 const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(75, 1, 0.1, 100);
