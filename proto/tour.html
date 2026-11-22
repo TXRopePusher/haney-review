@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Haney Residence · 360° Tour</title>
+<style>
+  :root { --bg: #1d1b18; --fg: #f3ede2; --muted: #b9ae9c; --accent: #d9a56a; --chip: rgba(29,27,24,.82); }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 15px/1.4 system-ui, -apple-system, Segoe UI, sans-serif; overflow: hidden; }
+  canvas#view { display: block; width: 100vw; height: 100vh; touch-action: none; cursor: grab; }
+  header { position: fixed; top: 0; left: 0; right: 0; padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start; justify-content: space-between;
+    background: linear-gradient(rgba(29,27,24,.85), rgba(29,27,24,0)); pointer-events: none; }
+  header b { font-size: 17px; } header span { color: var(--muted); font-size: 13px; display: block; }
+  .right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: auto; }
+  a.btn { color: var(--bg); background: var(--accent); text-decoration: none; padding: 8px 12px; border-radius: 8px; font-weight: 600; white-space: nowrap; }
+  #map { width: 150px; height: 120px; background: var(--chip); border-radius: 10px; border: 1px solid rgba(243,237,226,.2); cursor: pointer; }
+  nav { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); display: flex; gap: 8px; overflow-x: auto;
+    background: linear-gradient(rgba(29,27,24,0), rgba(29,27,24,.85)); scrollbar-width: none; }
+  nav::-webkit-scrollbar { display: none; }
+  nav button { flex: none; font: inherit; font-weight: 600; color: var(--fg); background: var(--chip); border: 1px solid rgba(243,237,226,.25); border-radius: 999px; padding: 9px 14px; cursor: pointer; }
+  nav button[aria-current="true"] { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  nav button:disabled { opacity: .4; }
+  #hint { position: fixed; bottom: 78px; left: 50%; transform: translateX(-50%); background: var(--chip); padding: 10px 14px; border-radius: 10px; font-size: 14px; transition: opacity .6s; max-width: calc(100vw - 32px); text-align: center; pointer-events: none; }
+  #fade { position: fixed; inset: 0; background: #1d1b18; opacity: 0; pointer-events: none; transition: opacity .25s; }
+  #load { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--muted); background: var(--chip); padding: 10px 14px; border-radius: 10px; }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="fade"></div>
+<header><div><b id="title">360° tour</b><span id="sub">Rendered in Blender (Cycles) · afternoon light, lights on</span></div>
+  <div class="right"><a class="btn" href="../">Walkthrough</a><canvas id="map" width="300" height="240" title="Tap a dot to jump there"></canvas></div></header>
+<div id="load">Loading…</div>
+<div id="hint">Drag to look around · tap a circle on the floor to step there</div>
+<nav id="rooms"></nav>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
+<script type="module">
+import * as THREE from 'three';
+const M = await (await fetch('tour_manifest.json?v=' + Date.now())).json();
+const SP = new Map(M.spots.map(s => [s.id, s])), EYE = M.eye;
+const cv = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true }); renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.outputColorSpace = THREE.SRGBColorSpace;
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(75, 1, 0.1, 200);
+const geo = new THREE.SphereGeometry(100, 96, 48); geo.scale(-1, 1, 1);
+const skyMat = new THREE.MeshBasicMaterial({ depthWrite: false }); const sky = new THREE.Mesh(geo, skyMat); sky.renderOrder = 0; scene.add(sky);
+const markers = new THREE.Group(); scene.add(markers);
+const ringGeo = new THREE.RingGeometry(0.62, 0.8, 48), discGeo = new THREE.CircleGeometry(0.62, 48);
+const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .9, depthTest: false, side: THREE.DoubleSide });
+const discMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .18, depthTest: false, side: THREE.DoubleSide });
+const hotMat = new THREE.MeshBasicMaterial({ color: 0xd9a56a, transparent: true, opacity: .55, depthTest: false, side: THREE.DoubleSide });
+const loader = new THREE.TextureLoader(), cache = new Map();
+let cur = null, lon = -90, lat = -8, fov = 75, busy = false;
+const B2T = (dx, dy, dz) => new THREE.Vector3(-dx, dz, dy);   // model feet (x north, y rear, z up) -> viewer space
+function tex(id) {
+  if (cache.has(id)) return cache.get(id);
+  const p = new Promise(res => loader.load(`tour/${id}.jpg?v=${M.v || 1}`, t => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = renderer.capabilities.getMaxAnisotropy(); res(t); }, undefined, () => res(null)));
+  cache.set(id, p); return p;
+}
+function placeMarkers() {
+  markers.clear(); const s = SP.get(cur);
+  for (const id of s.links) {
+    const t = SP.get(id); if (!t || !t.ready) continue;
+    const dx = t.x - s.x, dy = t.y - s.y, d = Math.hypot(dx, dy), k = .75 + d * .035;
+    const g = new THREE.Group(); g.position.copy(B2T(dx, dy, (t.z - s.z) - EYE + .02)); g.rotation.x = -Math.PI / 2; g.scale.setScalar(k);
+    const disc = new THREE.Mesh(discGeo, discMat), ring = new THREE.Mesh(ringGeo, ringMat); disc.renderOrder = ring.renderOrder = 2;
+    g.add(disc, ring); g.userData.id = id; disc.userData.id = ring.userData.id = id; markers.add(g);
+  }
+}
+async function go(id, instant) {
+  if (busy || !SP.get(id) || !SP.get(id).ready) return; busy = true;
+  const fade = document.getElementById('fade');
+  if (!instant) { fade.style.opacity = .85; await new Promise(r => setTimeout(r, 230)); }
+  const t = await tex(id); if (!t) { busy = false; fade.style.opacity = 0; return; }
+  skyMat.map = t; skyMat.needsUpdate = true; cur = id; placeMarkers();
+  const s = SP.get(id); document.getElementById('title').textContent = s.room;
+  document.getElementById('load').style.display = 'none';
+  history.replaceState(null, '', '?s=' + id + '&h=' + Math.round(lon));
+  document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-current', String(b.dataset.room === s.room)));
+  draw(); fade.style.opacity = 0; busy = false;
+  for (const n of s.links) if (SP.get(n)?.ready) tex(n);   // preload the next steps
+}
+// room list: the first ready spot in each room
+const rooms = [...new Set(M.spots.map(s => s.room))], nav = document.getElementById('rooms');
+for (const r of rooms) { const b = document.createElement('button'); b.textContent = r; b.dataset.room = r; const first = M.spots.find(s => s.room === r && s.ready);
+  b.disabled = !first; b.onclick = () => first && go(first.id); nav.append(b); }
+// mini plan
+const map = document.getElementById('map'), mg = map.getContext('2d');
+const allPts = M.outlines.flatMap(o => o.pts), X0 = Math.min(...allPts.map(p => p[0])), X1 = Math.max(...allPts.map(p => p[0])), Y0 = Math.min(...allPts.map(p => p[1])), Y1 = Math.max(...allPts.map(p => p[1]));
+const msc = Math.min((map.width - 20) / (X1 - X0), (map.height - 20) / (Y1 - Y0));
+const MP = (x, y) => [10 + (x - X0) * msc + ((map.width - 20) - (X1 - X0) * msc) / 2, map.height - 10 - (y - Y0) * msc - ((map.height - 20) - (Y1 - Y0) * msc) / 2];
+function drawMap() {
+  mg.clearRect(0, 0, map.width, map.height); mg.lineWidth = 2;
+  for (const o of M.outlines) { mg.beginPath(); o.pts.forEach((p, i) => { const [x, y] = MP(p[0], p[1]); i ? mg.lineTo(x, y) : mg.moveTo(x, y); }); mg.closePath();
+    mg.fillStyle = o.porch ? 'rgba(185,174,156,.12)' : 'rgba(243,237,226,.10)'; mg.fill(); mg.strokeStyle = 'rgba(243,237,226,.45)'; mg.stroke(); }
+  for (const s of M.spots) { const [x, y] = MP(s.x, s.y); mg.beginPath(); mg.arc(x, y, s.id === cur ? 7 : 4.5, 0, 7);
+    mg.fillStyle = s.id === cur ? '#d9a56a' : s.ready ? 'rgba(243,237,226,.85)' : 'rgba(243,237,226,.25)'; mg.fill(); }
+  const s = SP.get(cur); if (s) { const [x, y] = MP(s.x, s.y), th = THREE.MathUtils.degToRad(lon - 90), hx = -Math.cos(th), hy = Math.sin(th);
+    const a = Math.atan2(-hy, hx); mg.beginPath(); mg.moveTo(x, y); mg.arc(x, y, 22, a - .5, a + .5); mg.closePath(); mg.fillStyle = 'rgba(217,165,106,.45)'; mg.fill(); }
+}
+map.addEventListener('click', e => { const r = map.getBoundingClientRect(), mx = (e.clientX - r.left) * map.width / r.width, my = (e.clientY - r.top) * map.height / r.height;
+  let best = null, bd = 18; for (const s of M.spots) { if (!s.ready) continue; const [x, y] = MP(s.x, s.y), d = Math.hypot(x - mx, y - my); if (d < bd) { bd = d; best = s.id; } } if (best) go(best); });
+function size() { renderer.setSize(innerWidth, innerHeight, false); cv.style.width = innerWidth + 'px'; cv.style.height = innerHeight + 'px'; camera.aspect = innerWidth / innerHeight; draw(); }
+function draw() {
+  lat = Math.max(-85, Math.min(85, lat)); fov = Math.max(30, Math.min(95, fov)); camera.fov = fov; camera.updateProjectionMatrix();
+  const phi = THREE.MathUtils.degToRad(90 - lat), th = THREE.MathUtils.degToRad(lon - 90);
+  camera.lookAt(Math.sin(phi) * Math.cos(th), Math.cos(phi), Math.sin(phi) * Math.sin(th)); renderer.render(scene, camera); drawMap();
+}
+// look, pinch, tap
+const pts = new Map(); let pinch0 = 0, fov0 = fov, moved = 0; const rc = new THREE.Raycaster(), ndc = new THREE.Vector2();
+cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); moved = 0;
+  if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); fov0 = fov; } document.getElementById('hint').style.opacity = 0; });
+cv.addEventListener('pointermove', e => {
+  if (!pts.has(e.pointerId)) { ndc.set(e.clientX / innerWidth * 2 - 1, -e.clientY / innerHeight * 2 + 1); rc.setFromCamera(ndc, camera);
+    const h = rc.intersectObjects(markers.children, true)[0]; markers.children.forEach(g => g.children[0].material = h && h.object.userData.id === g.userData.id ? hotMat : discMat);
+    cv.style.cursor = h ? 'pointer' : 'grab'; renderer.render(scene, camera); return; }
+  const p = pts.get(e.pointerId); moved += Math.abs(e.clientX - p[0]) + Math.abs(e.clientY - p[1]);
+  if (pts.size === 1) { const k = fov / innerHeight; lon -= (e.clientX - p[0]) * k; lat += (e.clientY - p[1]) * k; }
+  pts.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pts.size === 2) { const [a, b] = [...pts.values()]; fov = fov0 * pinch0 / Math.max(1, Math.hypot(a[0] - b[0], a[1] - b[1])); }
+  draw(); });
+cv.addEventListener('pointerup', e => { const was = pts.size; pts.delete(e.pointerId);
+  if (was === 1 && moved < 8) { ndc.set(e.clientX / innerWidth * 2 - 1, -e.clientY / innerHeight * 2 + 1); rc.setFromCamera(ndc, camera);
+    const h = rc.intersectObjects(markers.children, true)[0]; if (h) go(h.object.userData.id); } });
+cv.addEventListener('pointercancel', e => pts.delete(e.pointerId));
+cv.addEventListener('wheel', e => { e.preventDefault(); fov += e.deltaY * 0.05; draw(); }, { passive: false });
+addEventListener('resize', size); size();
+const q = new URLSearchParams(location.search); if (q.has('h')) lon = +q.get('h');
+const start = (q.get('s') && SP.get(q.get('s'))?.ready) ? q.get('s') : (M.spots.find(s => s.room === 'Family' && s.ready) || M.spots.find(s => s.ready))?.id;
+if (start) go(start, true); else document.getElementById('load').textContent = 'The renders are still running. Check back shortly.';
+</script>
+</body>
+</html>
