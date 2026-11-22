@@ -3,59 +3,42 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Haney Residence · 360° Views</title>
+<title>Haney Residence · 360° Family Room</title>
 <style>
-  :root { --bg: #1d1b18; --fg: #f3ede2; --muted: #b9ae9c; --accent: #d9a56a; --chip: rgba(29,27,24,.82); }
+  :root { --bg: #1d1b18; --fg: #f3ede2; --muted: #b9ae9c; --accent: #d9a56a; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 15px/1.4 system-ui, -apple-system, Segoe UI, sans-serif; overflow: hidden; }
   canvas { display: block; width: 100vw; height: 100vh; touch-action: none; cursor: grab; }
   header { position: fixed; top: 0; left: 0; right: 0; padding: 14px 16px; display: flex; gap: 12px; align-items: center; justify-content: space-between;
     background: linear-gradient(rgba(29,27,24,.85), rgba(29,27,24,0)); pointer-events: none; }
   header b { font-size: 17px; } header span { color: var(--muted); font-size: 13px; display: block; }
   a.btn { pointer-events: auto; color: var(--bg); background: var(--accent); text-decoration: none; padding: 8px 12px; border-radius: 8px; font-weight: 600; white-space: nowrap; }
-  nav { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); display: flex; gap: 8px; overflow-x: auto;
-    background: linear-gradient(rgba(29,27,24,0), rgba(29,27,24,.85)); scrollbar-width: none; }
-  nav::-webkit-scrollbar { display: none; }
-  nav button { flex: none; font: inherit; font-weight: 600; color: var(--fg); background: var(--chip); border: 1px solid rgba(243,237,226,.25); border-radius: 999px; padding: 9px 14px; cursor: pointer; }
-  nav button[aria-current="true"] { background: var(--accent); color: var(--bg); border-color: var(--accent); }
-  #hint { position: fixed; bottom: 78px; left: 50%; transform: translateX(-50%); background: var(--chip); padding: 10px 14px; border-radius: 10px; font-size: 14px; transition: opacity .6s; max-width: calc(100vw - 32px); text-align: center; pointer-events: none; }
-  #load { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--muted); background: var(--chip); padding: 10px 14px; border-radius: 10px; }
+  #hint { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: rgba(29,27,24,.8); padding: 10px 14px; border-radius: 10px; color: var(--fg); font-size: 14px; transition: opacity .6s; max-width: calc(100vw - 32px); text-align: center; }
+  #load { position: fixed; inset: 0; display: grid; place-items: center; color: var(--muted); }
 </style>
 </head>
 <body>
-<header><div><b id="title">360° views</b><span>Rendered in Blender (Cycles) · afternoon light, lights on</span></div><a class="btn" href="../">Walkthrough</a></header>
-<div id="load">Loading…</div>
+<header><div><b>Family room, 360°</b><span>Rendered in Blender (Cycles) · afternoon light, lights on</span></div><a class="btn" href="./">Walkthrough</a></header>
+<div id="load">Loading the panorama…</div>
 <div id="hint">Drag to look around · pinch or scroll to zoom</div>
-<nav id="rooms"></nav>
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
 <script type="module">
 import * as THREE from 'three';
-const ROOMS = [['family', 'Family room'], ['kitchen', 'Kitchen'], ['foyer', 'Foyer'], ['mbed', 'Master bedroom'], ['mbath', 'Master bath'], ['porch', 'Back porch']];
-const V = '2';
 const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.prepend(renderer.domElement);
 const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(75, 1, 0.1, 100);
 const geo = new THREE.SphereGeometry(50, 96, 48); geo.scale(-1, 1, 1);
-const mat = new THREE.MeshBasicMaterial(); scene.add(new THREE.Mesh(geo, mat));
-const loader = new THREE.TextureLoader(), cache = new Map(), load = document.getElementById('load');
-let lon = -90, lat = 0, fov = 75;   // lon -90 = the image centre = the way the camera faced
-function show(id) {
-  const r = ROOMS.find(q => q[0] === id) || ROOMS[0]; document.getElementById('title').textContent = r[1] + ', 360°';
-  document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-current', String(b.dataset.id === r[0])));
-  history.replaceState(null, '', '?room=' + r[0]); lon = -90; lat = 0; fov = 75;
-  const done = t => { mat.map = t; mat.needsUpdate = true; load.style.display = 'none'; draw(); };
-  if (cache.has(r[0])) return done(cache.get(r[0]));
-  load.style.display = '';
-  loader.load(`pano_${r[0]}.jpg?v=${V}`, t => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = renderer.capabilities.getMaxAnisotropy(); cache.set(r[0], t); done(t); });
-}
-const nav = document.getElementById('rooms');
-for (const [id, name] of ROOMS) { const b = document.createElement('button'); b.textContent = name; b.dataset.id = id; b.onclick = () => show(id); nav.append(b); }
+const tex = new THREE.TextureLoader().load('pano_family.jpg?v=1', () => { document.getElementById('load').remove(); draw(); });
+tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+scene.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex })));
+let lon = -90, lat = 0, fov = 75;   // lon -90 = the image centre = facing the fireplace
 function size() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; draw(); }
 function draw() {
   lat = Math.max(-85, Math.min(85, lat)); fov = Math.max(30, Math.min(95, fov)); camera.fov = fov; camera.updateProjectionMatrix();
   const phi = THREE.MathUtils.degToRad(90 - lat), th = THREE.MathUtils.degToRad(lon - 90);
   camera.lookAt(Math.sin(phi) * Math.cos(th), Math.cos(phi), Math.sin(phi) * Math.sin(th)); renderer.render(scene, camera);
 }
-const pts = new Map(); let pinch0 = 0, fov0 = fov; const cv = renderer.domElement;
+const pts = new Map(); let pinch0 = 0, fov0 = fov;
+const cv = renderer.domElement;
 cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); fov0 = fov; } document.getElementById('hint').style.opacity = 0; });
 cv.addEventListener('pointermove', e => { if (!pts.has(e.pointerId)) return; const p = pts.get(e.pointerId);
   if (pts.size === 1) { const k = fov / innerHeight; lon -= (e.clientX - p[0]) * k; lat += (e.clientY - p[1]) * k; }
@@ -65,7 +48,6 @@ cv.addEventListener('pointermove', e => { if (!pts.has(e.pointerId)) return; con
 const up = e => { pts.delete(e.pointerId); }; cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
 cv.addEventListener('wheel', e => { e.preventDefault(); fov += e.deltaY * 0.05; draw(); }, { passive: false });
 addEventListener('resize', size); size();
-show(new URLSearchParams(location.search).get('room') || 'family');
 </script>
 </body>
 </html>
