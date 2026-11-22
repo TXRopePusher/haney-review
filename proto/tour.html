@@ -84,7 +84,31 @@ async function go(id, instant) {
 const ORDER = ['Family', 'Dining', 'Foyer', 'Kitchen', 'Front porch', 'Front walk', 'Master Bdrm', 'Master Bath', 'Closet', 'Rear porch'];
 const rooms = [...new Set(M.spots.map(s => s.room))].sort((a, b) => ((ORDER.indexOf(a) + 1) || 99) - ((ORDER.indexOf(b) + 1) || 99)), nav = document.getElementById('rooms');
 for (const r of rooms) { const b = document.createElement('button'); b.textContent = r; b.dataset.room = r; const first = M.spots.find(s => s.room === r && s.ready);
-  b.disabled = !first; b.onclick = () => { const f = M.spots.find(s => s.room === r && s.kind === 'inside' && s.ready) || M.spots.find(s => s.room === r && s.ready); if (f) go(f.id); }; nav.append(b); }
+  b.disabled = !first; b.onclick = () => { const f = M.spots.find(s => s.room === r && s.kind === 'inside' && s.ready) || M.spots.find(s => s.room === r && s.ready); if (f && !busy) { faceCentre(f); go(f.id); } }; nav.append(b); }
+// Opening heading for a room: look into the room. On the room's plan outline, cast rays across the view (±35°) every 5°
+// and take the heading with the deepest average view, nudged toward the room's middle. Front walk (no outline): face the house.
+function centroid(p) { let a = 0, cx = 0, cy = 0;
+  for (let i = 0; i < p.length; i++) { const [x1, y1] = p[i], [x2, y2] = p[(i + 1) % p.length], c = x1 * y2 - x2 * y1; a += c; cx += (x1 + x2) * c; cy += (y1 + y2) * c; }
+  return [cx / (3 * a), cy / (3 * a), Math.abs(a / 2)]; }
+function inPoly(p, x, y) { let c = false;
+  for (let i = 0, j = p.length - 1; i < p.length; j = i++) { const [xi, yi] = p[i], [xj, yj] = p[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; }
+  return c; }
+function rayLen(p, x, y, dx, dy, inside) { const ts = [];
+  for (let i = 0; i < p.length; i++) { const [ax, ay] = p[i], [bx, by] = p[(i + 1) % p.length], ex = bx - ax, ey = by - ay, den = dx * ey - dy * ex;
+    if (Math.abs(den) < 1e-9) continue; const t = ((ax - x) * ey - (ay - y) * ex) / den, u = ((ax - x) * dy - (ay - y) * dx) / den;
+    if (t > 0.05 && u >= 0 && u <= 1) ts.push(t); }
+  ts.sort((a, b) => a - b); return Math.min(40, inside ? (ts[0] || 0) : (ts[1] || 0));   // from a doorway outside the outline: the far wall
+}
+function faceCentre(s) {
+  const os = M.outlines.filter(o => o.name === s.room), o = os.find(o => inPoly(o.pts, s.x, s.y)) || os.sort((a, b) => centroid(b.pts)[2] - centroid(a.pts)[2])[0];
+  let best;
+  if (!o) best = Math.atan2((Y0 + Y1) / 2 - s.y, (X0 + X1) / 2 - s.x);
+  else { const c = centroid(o.pts), ac = Math.atan2(c[1] - s.y, c[0] - s.x), inside = inPoly(o.pts, s.x, s.y); let top = -1;
+    for (let a = 0; a < 360; a += 5) { const r = a * Math.PI / 180; let sum = 0, n = 0;
+      for (let f = -35; f <= 35; f += 5) { const q = r + f * Math.PI / 180; sum += rayLen(o.pts, s.x, s.y, Math.cos(q), Math.sin(q), inside); n++; }
+      const score = sum / n + 2 * Math.cos(r - ac); if (score > top) { top = score; best = r; } } }
+  lon = Math.atan2(Math.sin(best), -Math.cos(best)) * 180 / Math.PI + 90; lat = -8;
+}
 // mini plan
 const map = document.getElementById('map'), mg = map.getContext('2d');
 const allPts = M.outlines.flatMap(o => o.pts), X0 = Math.min(...allPts.map(p => p[0])), X1 = Math.max(...allPts.map(p => p[0])), Y0 = Math.min(...allPts.map(p => p[1])), Y1 = Math.max(...allPts.map(p => p[1]));
@@ -129,6 +153,7 @@ addEventListener('resize', size); size();
 if (location.hostname === 'localhost') window.TDBG = { THREE, camera, markers, rc, go, SP, get cur() { return cur; }, draw };
 const q = new URLSearchParams(location.search); if (q.has('h')) lon = +q.get('h');
 const start = (q.get('s') && SP.get(q.get('s'))?.ready) ? q.get('s') : (M.spots.find(s => s.room === 'Family' && s.kind === 'inside' && s.ready) || M.spots.find(s => s.room === 'Family' && s.ready) || M.spots.find(s => s.ready))?.id;
+if (start && !q.has('h')) faceCentre(SP.get(start));
 if (start) go(start, true); else document.getElementById('load').textContent = 'The renders are still running. Check back shortly.';
 </script>
 </body>
