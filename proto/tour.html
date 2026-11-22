@@ -23,6 +23,35 @@
   #hint { position: fixed; bottom: 78px; left: 50%; transform: translateX(-50%); background: var(--chip); padding: 10px 14px; border-radius: 10px; font-size: 14px; transition: opacity .6s; max-width: calc(100vw - 32px); text-align: center; pointer-events: none; }
   #fade { position: fixed; inset: 0; background: #1d1b18; opacity: 0; pointer-events: none; transition: opacity .25s; }
   #load { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--muted); background: var(--chip); padding: 10px 14px; border-radius: 10px; }
+  /* comments: pins in the panorama, and a panel to write or read them (same store as the review portal) */
+  #pins { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .pin { position: absolute; transform: translate(-50%, -50%); pointer-events: auto; min-width: 28px; height: 28px; padding: 0 7px; box-sizing: border-box; border-radius: 14px;
+    font: 700 13px/24px system-ui, -apple-system, Segoe UI, sans-serif; color: var(--bg); background: var(--accent); border: 2px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.45); cursor: pointer; }
+  .pin.open { background: #fff; } .pin.draft { background: #fff; pointer-events: none; font-size: 17px; line-height: 23px; }
+  #tip { position: fixed; pointer-events: none; background: var(--chip); color: var(--fg); padding: 5px 9px; border-radius: 7px; font-size: 13px; white-space: nowrap; transform: translate(14px, 14px); }
+  #panel { position: fixed; left: 16px; top: 80px; width: 340px; max-height: calc(100vh - 170px); overflow: auto; box-sizing: border-box; padding: 14px 16px 16px; z-index: 5;
+    background: #1d1b18; border: 1px solid rgba(243,237,226,.22); border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+  #panel h2 { font-size: 18px; margin: 2px 30px 4px 0; } #panel .eyebrow { color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; margin-top: 12px; }
+  #panel .eyebrow:first-child { margin-top: 0; } #panel .info { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+  #pclose { position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--fg); font-size: 22px; cursor: pointer; }
+  #panel textarea, #panel input[type=text] { width: 100%; box-sizing: border-box; font: inherit; color: var(--fg); background: rgba(243,237,226,.08); border: 1px solid rgba(243,237,226,.28); border-radius: 8px; padding: 9px 10px; margin: 6px 0; }
+  #panel textarea { min-height: 84px; resize: vertical; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+  .pbtn { font: inherit; font-weight: 600; color: var(--fg); background: rgba(243,237,226,.1); border: 1px solid rgba(243,237,226,.3); border-radius: 8px; padding: 7px 12px; cursor: pointer; text-decoration: none; }
+  .pbtn.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); } .pbtn:disabled { opacity: .5; }
+  .status { color: var(--muted); font-size: 13px; } .status.err { color: #f0a08a; }
+  .thumbs { display: flex; gap: 6px; flex-wrap: wrap; } .thumb { position: relative; width: 62px; height: 62px; border-radius: 6px; overflow: hidden; background: rgba(243,237,226,.08); }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; cursor: zoom-in; } .thumb button { position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; border: 0; border-radius: 10px; background: rgba(0,0,0,.6); color: #fff; cursor: pointer; line-height: 18px; padding: 0; }
+  .msg { border-top: 1px solid rgba(243,237,226,.14); padding: 9px 0; } .msg.reply { margin-left: 14px; } .msg .meta { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; }
+  .msg .meta b { color: var(--fg); } .msg p { margin: 4px 0; white-space: pre-wrap; }
+  .citem { display: block; width: 100%; text-align: left; font: inherit; color: var(--fg); background: rgba(243,237,226,.06); border: 1px solid rgba(243,237,226,.14); border-radius: 8px; padding: 7px 9px; margin: 5px 0; cursor: pointer; }
+  .citem small { color: var(--muted); display: block; }
+  .num { display: inline-block; min-width: 20px; height: 20px; line-height: 20px; border-radius: 10px; background: var(--accent); color: var(--bg); text-align: center; font-size: 12px; font-weight: 700; margin-right: 6px; padding: 0 4px; box-sizing: border-box; }
+  #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.88); display: flex; align-items: center; justify-content: center; z-index: 9; cursor: zoom-out; } #lightbox img { max-width: 94vw; max-height: 92vh; }
+  [hidden] { display: none !important; }
+  @media (max-width: 600px) {
+    #panel { left: 0; right: 0; top: auto; bottom: 0; width: auto; max-height: 62vh; border-radius: 14px 14px 0 0; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+  }
 </style>
 </head>
 <body>
@@ -31,11 +60,45 @@
 <header><div><b id="title">360° tour</b><span id="sub">Rendered in Blender (Cycles) · afternoon light, lights on</span></div>
   <div class="right"><a class="btn" href="../">‹ Back to review</a><canvas id="map" width="300" height="240" title="Tap a dot to jump there"></canvas></div></header>
 <div id="load">Loading…</div>
-<div id="hint">Drag to look around · tap a circle on the floor to step there</div>
+<div id="pins"></div>
+<div id="hint">Drag to look around · tap a circle on the floor to step there · tap anything else to comment on it</div>
 <nav id="rooms"></nav>
+<div id="tip" hidden></div>
+<aside id="panel" hidden><button id="pclose" aria-label="Close">×</button><div id="pbody"></div></aside>
+<div id="lightbox" hidden><img id="lbimg" alt="Attached photo"></div>
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
 <script type="module">
 import * as THREE from 'three';
+// ================= feedback store: the review portal's private GitHub repo, one JSON file per comment =================
+const STORE = { owner: 'TXRopePusher', repo: 'haney-feedback', branch: 'main' };
+const KEY = '402204d23886b7d438002d65cef9dea0', SEALED = 'U1lGWkVWO0JSTGcHU3Yrf2V9B2kCJgNXOgAjSz0qGHFmbwphYG0tYnIIVQYxXR5tB3Z3eX0JTnIIHAJ4PjRRQ2xlUQJ4WgdmcHxAZBJlImxkDgJlBCVzcDAyIwE9';
+const TOKEN = (() => { const b = atob(SEALED), k = KEY; let s = ''; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b.charCodeAt(i) ^ k.charCodeAt(i % k.length)); return s; })();
+const API = `https://api.github.com/repos/${STORE.owner}/${STORE.repo}/contents/`;
+const H = (extra) => ({ Authorization: 'Bearer ' + TOKEN, 'X-GitHub-Api-Version': '2022-11-28', ...extra });
+const DRY = location.hostname === 'localhost' && new URLSearchParams(location.search).has('dry');   // local testing: nothing is written
+const b64 = (bytes) => { let s = ''; const c = 0x8000; for (let i = 0; i < bytes.length; i += c) s += String.fromCharCode.apply(null, bytes.subarray(i, i + c)); return btoa(s); };
+async function putFile(path, bytes, message) {
+  if (DRY) { await new Promise(r => setTimeout(r, 300)); return {}; }
+  const r = await fetch(API + path, { method: 'PUT', headers: H({ 'Content-Type': 'application/json' }), body: JSON.stringify({ message, content: b64(bytes), branch: STORE.branch }) });
+  if (!r.ok) throw new Error('save failed (' + r.status + ')'); return r.json();
+}
+async function listDir(path) {
+  const r = await fetch(API + path + '?ref=' + STORE.branch + '&_=' + Date.now(), { headers: H({ Accept: 'application/vnd.github+json' }), cache: 'no-store' });
+  if (r.status === 404) return []; if (!r.ok) throw new Error('load failed (' + r.status + ')'); return r.json();
+}
+async function getRaw(path, asBlob, fresh) {
+  const r = await fetch(API + path + '?ref=' + STORE.branch, { headers: H({ Accept: 'application/vnd.github.raw' }), cache: fresh ? 'no-cache' : 'force-cache' });
+  if (!r.ok) throw new Error('load failed (' + r.status + ')'); return asBlob ? r.blob() : r.json();
+}
+const imgCache = new Map();
+async function imageURL(path) { if (!imgCache.has(path)) imgCache.set(path, getRaw(path, true).then(b => URL.createObjectURL(b))); return imgCache.get(path); }
+async function shrink(file) {   // attached photo -> JPEG, longest side 1800 px
+  const bmp = await createImageBitmap(file); const s = Math.min(1, 1800 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * s); c.height = Math.round(bmp.height * s); c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', .84)); return { blob, w: c.width, h: c.height };
+}
+const uid = () => new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14) + '-' + Math.random().toString(36).slice(2, 7);
+const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } };
 const M = await (await fetch('tour_manifest.json?v=' + Date.now())).json();
 const SP = new Map(M.spots.map(s => [s.id, s])), EYE = M.eye;
 const cv = document.getElementById('view');
@@ -73,6 +136,8 @@ async function go(id, instant) {
   if (!instant) { fade.style.opacity = .85; await new Promise(r => setTimeout(r, 230)); }
   const t = await tex(id); if (!t) { busy = false; fade.style.opacity = 0; return; }
   skyMat.map = t; skyMat.needsUpdate = true; cur = id; placeMarkers();
+  pm = null; if (sel) { sel = null; hl.visible = false; if (!openId) closePanel(); }
+  pickMap(id).then(m => { if (cur !== id) return; pm = m; const c = openId && comments.find(x => x.id === openId), k = sel ? sel.k : c && PICK ? PICK.ids.indexOf(c.objId) : 0; highlight(k > 0 ? k : 0); draw(); });
   const s = SP.get(id); document.getElementById('title').textContent = s.room;
   document.getElementById('load').style.display = 'none';
   history.replaceState(null, '', '?s=' + id + '&h=' + Math.round(lon));
@@ -129,7 +194,7 @@ function size() { renderer.setSize(innerWidth, innerHeight, false); cv.style.wid
 function draw() {
   lat = Math.max(-85, Math.min(85, lat)); fov = Math.max(30, Math.min(95, fov)); camera.fov = fov; camera.updateProjectionMatrix();
   const phi = THREE.MathUtils.degToRad(90 - lat), th = THREE.MathUtils.degToRad(lon - 90);
-  camera.lookAt(Math.sin(phi) * Math.cos(th), Math.cos(phi), Math.sin(phi) * Math.sin(th)); renderer.render(scene, camera); drawMap();
+  camera.lookAt(Math.sin(phi) * Math.cos(th), Math.cos(phi), Math.sin(phi) * Math.sin(th)); renderer.render(scene, camera); drawMap(); drawPins();
 }
 // look, pinch, tap
 const pts = new Map(); let pinch0 = 0, fov0 = fov, moved = 0; const rc = new THREE.Raycaster(), ndc = new THREE.Vector2();
@@ -138,7 +203,9 @@ cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); pts
 cv.addEventListener('pointermove', e => {
   if (!pts.has(e.pointerId)) { ndc.set(e.clientX / innerWidth * 2 - 1, -e.clientY / innerHeight * 2 + 1); rc.setFromCamera(ndc, camera);
     const h = rc.intersectObjects(markers.children, true)[0]; markers.children.forEach(g => g.children[0].material = h && h.object.userData.id === g.userData.id ? hotMat : discMat);
-    cv.style.cursor = h ? 'pointer' : 'grab'; renderer.render(scene, camera); return; }
+    const p = !h && e.pointerType === 'mouse' ? pickAt(e.clientX, e.clientY) : null; const tip = document.getElementById('tip');
+    if (p) { tip.textContent = p.label; tip.style.left = e.clientX + 'px'; tip.style.top = e.clientY + 'px'; tip.hidden = false; } else tip.hidden = true;
+    cv.style.cursor = h || p ? 'pointer' : 'grab'; renderer.render(scene, camera); return; }
   const p = pts.get(e.pointerId); moved += Math.abs(e.clientX - p[0]) + Math.abs(e.clientY - p[1]);
   if (pts.size === 1) { const k = fov / innerHeight * (e.pointerType === 'mouse' ? 1 : 2); lon -= (e.clientX - p[0]) * k; lat += (e.clientY - p[1]) * k; }
   pts.set(e.pointerId, [e.clientX, e.clientY]);
@@ -146,15 +213,143 @@ cv.addEventListener('pointermove', e => {
   draw(); });
 cv.addEventListener('pointerup', e => { const was = pts.size; pts.delete(e.pointerId);
   if (was === 1 && moved < 8) { ndc.set(e.clientX / innerWidth * 2 - 1, -e.clientY / innerHeight * 2 + 1); rc.setFromCamera(ndc, camera);
-    const h = rc.intersectObjects(markers.children, true)[0]; if (h) go(h.object.userData.id); } });
+    const h = rc.intersectObjects(markers.children, true)[0]; if (h) go(h.object.userData.id); else choose(pickAt(e.clientX, e.clientY)); } });
 cv.addEventListener('pointercancel', e => pts.delete(e.pointerId));
+cv.addEventListener('pointerleave', () => document.getElementById('tip').hidden = true);
 cv.addEventListener('wheel', e => { e.preventDefault(); fov += e.deltaY * 0.05; draw(); }, { passive: false });
+// ================= pick: what is under a tap =================
+// tour/<spot>_ids.png (from blender_idmap.py): per pixel of the panorama, the element index (12 bits) and its distance in 0.05' steps (12 bits)
+const CAT = { room: 'Rooms', stone: 'Entry portico', column: 'Entry portico', slab: 'Porches', window: 'Windows', door: 'Doors', roof: 'Roofs', wall: 'Exterior walls', int: 'Interior walls', chimney: 'Fireplaces', decor: 'Porch furnishings', site: 'Site',
+  case: 'Cabinets & built-ins', plumb: 'Plumbing fixtures', appl: 'Appliances', light: 'Lighting', floor: 'Floors', ceil: 'Ceilings', stair: 'Stairs', elec: 'Receptacles' };
+let PICK = null; fetch('tour/ids.json?v=' + (M.v || 1)).then(r => r.ok ? r.json() : null).then(p => { PICK = p; }).catch(() => {});
+const maps = new Map(); let pm = null;
+function pickMap(id) {
+  if (!maps.has(id)) maps.set(id, fetch(`tour/${id}_ids.png?v=${M.v || 1}`).then(r => r.ok ? r.blob() : null)
+    .then(b => b && createImageBitmap(b, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' }))
+    .then(bm => { if (!bm) return null; const c = document.createElement('canvas'); c.width = bm.width; c.height = bm.height; const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(bm, 0, 0);
+      return { w: bm.width, h: bm.height, px: g.getImageData(0, 0, bm.width, bm.height).data }; }).catch(() => null));
+  return maps.get(id);
+}
+function sample(dx, dy, dz) {   // model direction -> { k: element index, d: distance in feet }
+  if (!pm) return null; const L = Math.hypot(dx, dy, dz); let u = 0.5 - Math.atan2(dy, dx) / (2 * Math.PI); u -= Math.floor(u); const v = 0.5 - Math.asin(dz / L) / Math.PI;
+  const i = Math.min(pm.w - 1, Math.floor(u * pm.w)), j = Math.min(pm.h - 1, Math.max(0, Math.floor(v * pm.h))), o = (j * pm.w + i) * 4, R = pm.px[o], G = pm.px[o + 1], B = pm.px[o + 2], d = ((G & 15) << 8) | B;
+  return { k: (R << 4) | (G >> 4), d: d >= 4095 ? Infinity : d * 0.05 };
+}
+function pickAt(cx, cy) {
+  if (!PICK || !pm) return null; ndc.set(cx / innerWidth * 2 - 1, -cy / innerHeight * 2 + 1); rc.setFromCamera(ndc, camera);
+  const v = rc.ray.direction, dx = -v.x, dy = v.z, dz = v.y, q = sample(dx, dy, dz); if (!q || !q.k) return null;
+  const id = PICK.ids[q.k], e = PICK.el[id]; if (!e) return null; const s = SP.get(cur), d = Math.min(q.d, 150);
+  return { id, k: q.k, label: e[0], cat: e[1], info: e[2], point: { x: +(s.x + dx * d).toFixed(2), y: +(s.y + dy * d).toFixed(2), z: +(s.z + EYE + dz * d).toFixed(2) } };
+}
+// the chosen element glows: an overlay sphere with that element's pixels tinted, its outline stronger
+const hlMat = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, depthTest: false }); const hl = new THREE.Mesh(geo, hlMat); hl.renderOrder = 1; hl.visible = false; scene.add(hl);
+function highlight(k) {
+  if (!pm || !k || PICK.ids[k] === 'site') { hl.visible = false; return; }
+  const { w, h, px } = pm, a = new Uint8Array(w * h * 4), K = (o) => (px[o] << 4) | (px[o + 1] >> 4);
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const o = (j * w + i) * 4; if (K(o) !== k) continue;
+    const edge = i === 0 || i === w - 1 || j === 0 || j === h - 1 || K(o - 4) !== k || K(o + 4) !== k || K(o - w * 4) !== k || K(o + w * 4) !== k;
+    const t = ((h - 1 - j) * w + i) * 4; a[t] = 240; a[t + 1] = 180; a[t + 2] = 110; a[t + 3] = edge ? 235 : 80; }
+  const t = new THREE.DataTexture(a, w, h); t.colorSpace = THREE.SRGBColorSpace; t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true;
+  if (hlMat.map) hlMat.map.dispose(); hlMat.map = t; hlMat.needsUpdate = true; hl.visible = true;
+}
+
+// ================= comments =================
+let comments = [], resolved = new Set(), me = store('haney-name') || '', sel = null, openId = null, draftImages = [], syncing = false;
+const threads = () => comments.filter(c => !c.replyTo), openThreads = () => threads().filter(c => !resolved.has(c.id));
+const numOf = c => resolved.has(c.id) ? '✓' : String(openThreads().indexOf(c) + 1);
+const $ = id => document.getElementById(id), panel = $('panel'), pbody = $('pbody'), pinsEl = $('pins');
+const h = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
+const fmtTime = iso => { const d = new Date(iso); return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); };
+function screenOf(p, objId, here) {   // a model point -> screen px, or null when it's behind you, too far, or hidden behind something in this panorama
+  const s = SP.get(cur); if (!s || !p || p.z === undefined || p.z === null) return null;
+  const dx = p.x - s.x, dy = p.y - s.y, dz = p.z - (s.z + EYE), L = Math.hypot(dx, dy, dz); if (L < .3 || L > 90) return null;
+  if (!here) { const q = sample(dx, dy, dz); if (!q || !PICK) return null; if (PICK.ids[q.k] !== objId && q.d < L - Math.max(1.2, L * .06)) return null; }
+  const v = B2T(dx, dy, dz).project(camera); if (v.z > 1 || Math.abs(v.x) > 1.05 || Math.abs(v.y) > 1.05) return null;
+  return { x: (v.x + 1) / 2 * innerWidth, y: (1 - v.y) / 2 * innerHeight };
+}
+function drawPins() {
+  if (!pinsEl) return; pinsEl.textContent = '';
+  openThreads().forEach((c, i) => { const sc = screenOf(c.point, c.objId, c.tour && c.tour.s === cur); if (!sc) return;
+    const b = h('button', 'pin' + (openId === c.id ? ' open' : ''), String(i + 1)); b.style.left = sc.x + 'px'; b.style.top = sc.y + 'px'; b.title = c.author + ': ' + c.label;
+    b.onclick = () => openThread(c.id); pinsEl.appendChild(b); });
+  if (sel && !openId) { const sc = screenOf(sel.point, sel.id, true); if (sc) { const b = h('div', 'pin draft', '+'); b.style.left = sc.x + 'px'; b.style.top = sc.y + 'px'; pinsEl.appendChild(b); } }
+}
+function closePanel() { panel.hidden = true; openId = null; sel = null; hl.visible = false; draw(); }
+$('pclose').onclick = closePanel;
+addEventListener('keydown', e => { if (e.key === 'Escape') { if (!$('lightbox').hidden) $('lightbox').hidden = true; else if (!panel.hidden) closePanel(); } });
+$('lightbox').onclick = () => $('lightbox').hidden = true;
+function lightbox(url) { $('lbimg').src = url; $('lightbox').hidden = false; }
+function choose(p) {   // a tap on the panorama: select what's there and open the comment box (a tap on sky clears)
+  if (!p) { if (sel || openId) closePanel(); return; }
+  sel = p; openId = null; highlight(p.k); renderPanel(); draw();
+}
+function openThread(id) { const c = comments.find(x => x.id === id); if (!c) return; openId = id; sel = null; const k = PICK ? PICK.ids.indexOf(c.objId) : -1; highlight(k > 0 ? k : 0); renderPanel(); draw(); }
+function composer(onPost, placeholder) {
+  const wrap = h('div'); draftImages = [];
+  let nameIn = null; if (!me) { nameIn = h('input'); nameIn.type = 'text'; nameIn.placeholder = 'Your name'; nameIn.maxLength = 40; wrap.append(nameIn); }
+  const ta = h('textarea'); ta.placeholder = placeholder; ta.maxLength = 4000; const thumbs = h('div', 'thumbs');
+  const file = h('input'); file.type = 'file'; file.accept = 'image/*'; file.multiple = true; file.hidden = true;
+  const attach = h('button', 'pbtn', 'Attach photos'); attach.type = 'button'; attach.onclick = () => file.click();
+  const renderThumbs = () => { thumbs.textContent = ''; draftImages.forEach((im, i) => { const t = h('div', 'thumb'), img = h('img'); img.src = im.url; img.alt = 'Attached image ' + (i + 1); img.onclick = () => lightbox(im.url);
+    const x = h('button', '', '×'); x.setAttribute('aria-label', 'Remove image'); x.onclick = () => { URL.revokeObjectURL(im.url); draftImages.splice(i, 1); renderThumbs(); }; t.append(img, x); thumbs.appendChild(t); }); };
+  const addFiles = async files => { for (const f of files) { if (!f.type.startsWith('image/') || draftImages.length >= 8) continue; try { const s = await shrink(f); draftImages.push({ ...s, url: URL.createObjectURL(s.blob) }); } catch {} } renderThumbs(); };
+  file.onchange = () => addFiles(file.files); ta.addEventListener('paste', e => { const fs = [...(e.clipboardData?.files || [])]; if (fs.length) { e.preventDefault(); addFiles(fs); } });
+  const post = h('button', 'pbtn primary', 'Post comment'), st = h('span', 'status');
+  post.onclick = async () => { const text = ta.value.trim();
+    if (nameIn) { const n = nameIn.value.trim().slice(0, 40); if (!n) { st.className = 'status err'; st.textContent = 'Add your name so Blake knows who wrote it.'; nameIn.focus(); return; } me = n; store('haney-name', me); }
+    if (!text && !draftImages.length) { st.className = 'status err'; st.textContent = 'Write a note or attach a photo first.'; return; }
+    post.disabled = true; st.className = 'status'; st.textContent = draftImages.length ? 'Uploading photos…' : 'Saving…'; const imgs = draftImages; draftImages = [];
+    try { await onPost(text, imgs); imgs.forEach(im => URL.revokeObjectURL(im.url)); }
+    catch { draftImages = imgs; renderThumbs(); st.className = 'status err'; st.textContent = 'Not saved. Check your connection and press Post again.'; post.disabled = false; } };
+  const r1 = h('div', 'row'); r1.append(attach, file); const r2 = h('div', 'row'); r2.append(post, st); wrap.append(ta, thumbs, r1, r2); return wrap;
+}
+async function saveComment(base, text, imgs) {
+  const id = uid(), images = [];
+  for (let i = 0; i < imgs.length; i++) { const im = imgs[i], path = `images/${id}-${i + 1}.jpg`; await putFile(path, new Uint8Array(await im.blob.arrayBuffer()), `Image for ${id}`); images.push({ path, w: im.w, h: im.h }); }
+  const rec = { v: 1, id, author: me || 'Guest', text, created: new Date().toISOString(), images, ...base };
+  await putFile(`comments/${id}.json`, new TextEncoder().encode(JSON.stringify(rec, null, 2)), `Comment by ${rec.author} on ${rec.label} (360° tour)`);
+  comments.push(rec); comments.sort((a, b) => a.created.localeCompare(b.created)); return rec;
+}
+function msg(c, isReply) { const m = h('div', 'msg' + (isReply ? ' reply' : '')), meta = h('div', 'meta'), who = h('span'); who.append(h('b', '', c.author)); meta.append(who, h('span', '', fmtTime(c.created))); m.append(meta);
+  if (c.text) m.append(h('p', '', c.text));
+  if (c.images && c.images.length) { const tb = h('div', 'thumbs'); m.append(tb); for (const im of c.images) { const t = h('div', 'thumb'), img = h('img'); img.alt = 'Attached photo'; t.append(img); tb.append(t);
+    imageURL(im.path).then(u => { img.src = u; img.onclick = () => lightbox(u); }).catch(() => { t.textContent = '×'; }); } }
+  return m; }
+function threadItem(c) { const b = h('button', 'citem'), top = h('div'); top.append(h('span', 'num', numOf(c)), h('b', '', c.author)); b.append(top, h('small', '', (c.text || '(photo)').slice(0, 120))); b.onclick = () => openThread(c.id); return b; }
+function renderPanel() {
+  pbody.textContent = ''; panel.hidden = false; $('hint').style.opacity = 0;
+  if (openId) {
+    const c = comments.find(x => x.id === openId); if (!c) { closePanel(); return; }
+    const eb = h('div', 'eyebrow'); eb.append(h('span', 'num', numOf(c)), document.createTextNode((CAT[c.cat] || 'Comment') + (resolved.has(c.id) ? ' · resolved' : ''))); pbody.append(eb, h('h2', '', c.label));
+    pbody.append(msg(c, false)); comments.filter(r => r.replyTo === c.id).forEach(r => pbody.append(msg(r, true)));
+    pbody.append(h('div', 'eyebrow', 'Reply'), composer((text, imgs) => saveComment({ replyTo: c.id, objId: c.objId, label: c.label, cat: c.cat, view: c.view, point: c.point, ...(c.tour ? { tour: c.tour } : {}), ...(c.walk ? { walk: c.walk } : {}) }, text, imgs).then(() => renderPanel()), 'Add to this…'));
+    return;
+  }
+  if (!sel) { closePanel(); return; }
+  pbody.append(h('div', 'eyebrow', CAT[sel.cat] || 'Comment'), h('h2', '', sel.label)); if (sel.info) pbody.append(h('div', 'info', sel.info));
+  pbody.append(composer((text, imgs) => saveComment({ objId: sel.id, label: sel.label, cat: sel.cat, view: '3d', point: sel.point, tour: { s: cur, h: Math.round(lon), v: Math.round(lat) } }, text, imgs).then(rec => openThread(rec.id)),
+    'What do you think about this? Anything you would change?'));
+  const others = sel.id === 'site' ? [] : openThreads().filter(c => c.objId === sel.id);
+  if (others.length) { pbody.append(h('div', 'eyebrow', 'Already said about this')); others.forEach(c => pbody.append(threadItem(c))); }
+}
+async function sync() { if (syncing || document.hidden) return; syncing = true;
+  try { const files = (await listDir('comments')).filter(f => f.name.endsWith('.json')), known = new Set(comments.map(c => c.id + '.json')), fresh = files.filter(f => !known.has(f.name));
+    const recs = await Promise.all(fresh.map(f => getRaw('comments/' + f.name).catch(() => null))); let added = false;
+    for (const r of recs) if (r && r.id && !comments.some(c => c.id === r.id)) { comments.push(r); added = true; }
+    let rs = null; try { rs = await getRaw('status/resolved.json', false, true); } catch {}
+    const nr = new Set((rs && rs.resolved) || []), changed = nr.size !== resolved.size || [...nr].some(x => !resolved.has(x)); if (changed) resolved = nr;
+    if (added) comments.sort((a, b) => a.created.localeCompare(b.created));
+    if (added || changed) { draw(); if (openId && !panel.hidden) renderPanel(); } }
+  catch {} finally { syncing = false; } }
+setInterval(sync, 30000); document.addEventListener('visibilitychange', sync);
+
 addEventListener('resize', size); size();
-if (location.hostname === 'localhost') window.TDBG = { THREE, camera, markers, rc, go, SP, get cur() { return cur; }, draw };
+if (location.hostname === 'localhost') window.TDBG = { THREE, camera, markers, rc, go, SP, get cur() { return cur; }, draw, pickAt, choose, openThread, get comments() { return comments; }, get open() { return openThreads().map(c => c.id); }, set view(a) { lon = a[0]; lat = a[1]; draw(); } };
 const q = new URLSearchParams(location.search); if (q.has('h')) lon = +q.get('h');
 const start = (q.get('s') && SP.get(q.get('s'))?.ready) ? q.get('s') : (M.spots.find(s => s.room === 'Family' && s.kind === 'inside' && s.ready) || M.spots.find(s => s.room === 'Family' && s.ready) || M.spots.find(s => s.ready))?.id;
 if (start && !q.has('h')) faceCentre(SP.get(start));
 if (start) go(start, true); else document.getElementById('load').textContent = 'The renders are still running. Check back shortly.';
+sync().then(() => { if (q.get('c')) openThread(q.get('c')); });   // ?c=<comment id>: opened from that comment in the review portal
 </script>
 </body>
 </html>
