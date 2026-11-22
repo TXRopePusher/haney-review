@@ -27,6 +27,7 @@
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
   #donebtn .short { display: none; }
+  .tourbtn { text-decoration: none; color: inherit; white-space: nowrap; } .tourbtn .short { display: none; }
   html, body { height: 100%; margin: 0; }
   body { background: var(--bg); color: var(--ink); font: 15px/1.45 var(--body); overflow: hidden; }
   button { font: inherit; color: inherit; }
@@ -148,7 +149,7 @@
     .dialog { padding: 20px; }
     .dialog h1 { font-size: 28px; }
   }
-  @media (max-width: 480px) { #donebtn .long { display: none; } #donebtn .short { display: inline; } .tabs { order: 3; width: 100%; } .tabs button { flex: 1; } }
+  @media (max-width: 480px) { #donebtn .long { display: none; } #donebtn .short { display: inline; } .tourbtn .long { display: none; } .tourbtn .short { display: inline; } .tourbtn, #donebtn { padding: 8px 9px; } .tabs { order: 3; width: 100%; } .tabs button { flex: 1; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -161,6 +162,7 @@
       <button role="tab" aria-selected="false" data-view="walk">Walk inside</button>
       <button role="tab" aria-selected="false" data-view="plan">Floor plan</button>
     </div>
+    <a class="btn tourbtn" id="tourbtn" href="proto/tour.html" title="Photo-real 360° views of every room"><span class="long">360° tour</span><span class="short">360°</span></a>
     <button class="who" id="who" title="Change your name"><span class="lbl">Commenting as </span><b id="whoname">—</b></button>
     <button class="btn" id="donebtn"><span class="long">I'm finished</span><span class="short">Done</span></button>
     <button class="iconbtn" id="helpbtn" aria-label="How to review">?</button>
@@ -275,7 +277,7 @@ const uid = () => new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14) 
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } };
 
 // ================= model data =================
-const BUILD = '20261122014419';   // stamped by publish.py so phones and browsers never mix cached files from different builds
+const BUILD = '20261122083922';   // stamped by publish.py so phones and browsers never mix cached files from different builds
 const DATA = await (await fetch('data.json?b=' + BUILD)).json();
 // real site: USGS 3DEP lidar terrain, USDA NAIP imagery, existing structures and trees (built by geo_build.py)
 const SITE = await fetch('site.json?b=' + BUILD).then(r => r.ok ? r.json() : null).catch(() => null);
