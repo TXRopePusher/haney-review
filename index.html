@@ -275,7 +275,7 @@ const uid = () => new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14) 
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } };
 
 // ================= model data =================
-const BUILD = '20261118172501';   // stamped by publish.py so phones and browsers never mix cached files from different builds
+const BUILD = '20261121223037';   // stamped by publish.py so phones and browsers never mix cached files from different builds
 const DATA = await (await fetch('data.json?b=' + BUILD)).json();
 // real site: USGS 3DEP lidar terrain, USDA NAIP imagery, existing structures and trees (built by geo_build.py)
 const SITE = await fetch('site.json?b=' + BUILD).then(r => r.ok ? r.json() : null).catch(() => null);
@@ -343,7 +343,7 @@ const subwayTex = canvasTex(512, (g, S, r) => { g.fillStyle = '#d6cab4'; g.fillR
   for (let j = 0; j < 8; j++) for (let i = -1; i < 5; i++) { const x = i * S / 4 + (j % 2) * S / 8, y = j * S / 8; g.fillStyle = `hsl(40,${28 + r() * 10}%,${88 + r() * 4}%)`; g.fillRect(x + 2, y + 2, S / 4 - 4, S / 8 - 4); } }, 3);
 const hexTex = canvasTex(512, (g, S, r) => { g.fillStyle = '#cbbda5'; g.fillRect(0, 0, S, S);   // 1' square: 2" travertine hex mosaic
   const R = S / 12; for (let j = -1; j < 14; j++) for (let i = -1; i < 9; i++) { const cx = i * R * 1.732 + (j % 2) * R * .866, cy = j * R * 1.5; g.beginPath(); for (let k = 0; k < 6; k++) { const a = Math.PI / 6 + k * Math.PI / 3; g.lineTo(cx + Math.cos(a) * (R - 2), cy + Math.sin(a) * (R - 2)); } g.closePath(); const l = 70 + r() * 10; g.fillStyle = `hsl(36,${22 + r() * 10}%,${l}%)`; g.fill(); } }, 4);
-MAT.ceiling = std({ color: 0xf3ecde, roughness: .95 });
+MAT.ceiling = MAT.interior;   // walls and ceilings are one paint
 MAT.oak = std({ map: oakTex, roughness: .62 }); MAT.tile = std({ map: tileTex, roughness: .32 }); MAT.subway = std({ map: subwayTex, roughness: .22 }); MAT.hex = std({ map: hexTex, roughness: .4 });
 MAT.showerGlass = new THREE.MeshPhysicalMaterial({ color: 0xdff0f2, roughness: .03, metalness: 0, transparent: true, opacity: .16, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 1.5 });
 MAT.mirror = std({ color: 0xc9d0d4, metalness: .9, roughness: .12, envMapIntensity: .55 });
@@ -352,7 +352,7 @@ function interiorMat(n, c) {
   if (intCache.has(n)) return intCache.get(n);
   const color = new THREE.Color().setRGB(c[0] / 255, c[1] / 255, c[2] / 255, THREE.SRGBColorSpace); let r;
   if (n.includes('glow')) r = { m: new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.6, roughness: .3, side: THREE.DoubleSide }) };
-  else if (n.includes('wall paint')) r = { m: MAT.interior };   // same paint as the gypsum walls
+  else if (n.includes('wall paint') || n.includes('ceiling paint')) r = { m: MAT.interior };   // walls, vault and ceilings: one paint
   else if (n.includes('shower glass')) r = { m: MAT.showerGlass };
   else if (n.includes('mirror')) r = { m: MAT.mirror };
   else if (n.includes('white oak')) r = { m: MAT.oak, uv: 8 };
