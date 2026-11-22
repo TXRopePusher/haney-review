@@ -44,7 +44,7 @@ const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(75, 1, 0.1
 const geo = new THREE.SphereGeometry(100, 96, 48); geo.scale(-1, 1, 1);
 const skyMat = new THREE.MeshBasicMaterial({ depthWrite: false }); const sky = new THREE.Mesh(geo, skyMat); sky.renderOrder = 0; scene.add(sky);
 const markers = new THREE.Group(); scene.add(markers);
-const ringGeo = new THREE.RingGeometry(0.62, 0.8, 48), discGeo = new THREE.CircleGeometry(0.62, 48);
+const ringGeo = new THREE.RingGeometry(0.62, 0.8, 48), discGeo = new THREE.CircleGeometry(0.62, 48), hitGeo = new THREE.CircleGeometry(1.6, 24);
 const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .9, depthTest: false, side: THREE.DoubleSide });
 const discMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .18, depthTest: false, side: THREE.DoubleSide });
 const hotMat = new THREE.MeshBasicMaterial({ color: 0xd9a56a, transparent: true, opacity: .55, depthTest: false, side: THREE.DoubleSide });
@@ -63,7 +63,8 @@ function placeMarkers() {
     const dx = t.x - s.x, dy = t.y - s.y, d = Math.hypot(dx, dy), k = .75 + d * .035;
     const g = new THREE.Group(); g.position.copy(B2T(dx, dy, (t.z - s.z) - EYE + .02)); g.rotation.x = -Math.PI / 2; g.scale.setScalar(k);
     const disc = new THREE.Mesh(discGeo, discMat), ring = new THREE.Mesh(ringGeo, ringMat); disc.renderOrder = ring.renderOrder = 2;
-    g.add(disc, ring); g.userData.id = id; disc.userData.id = ring.userData.id = id; markers.add(g);
+    const hit = new THREE.Mesh(hitGeo, discMat); hit.visible = false;   // a thumb-sized tap target around the ring
+    g.add(disc, ring, hit); g.userData.id = id; disc.userData.id = ring.userData.id = hit.userData.id = id; markers.add(g);
   }
 }
 async function go(id, instant) {
@@ -80,9 +81,10 @@ async function go(id, instant) {
   for (const n of s.links) if (SP.get(n)?.ready) tex(n);   // preload the next steps
 }
 // room list: the first ready spot in each room
-const rooms = [...new Set(M.spots.map(s => s.room))], nav = document.getElementById('rooms');
+const ORDER = ['Family', 'Dining', 'Foyer', 'Kitchen', 'Front porch', 'Front walk', 'Master Bdrm', 'Master Bath', 'Closet', 'Rear porch'];
+const rooms = [...new Set(M.spots.map(s => s.room))].sort((a, b) => ((ORDER.indexOf(a) + 1) || 99) - ((ORDER.indexOf(b) + 1) || 99)), nav = document.getElementById('rooms');
 for (const r of rooms) { const b = document.createElement('button'); b.textContent = r; b.dataset.room = r; const first = M.spots.find(s => s.room === r && s.ready);
-  b.disabled = !first; b.onclick = () => first && go(first.id); nav.append(b); }
+  b.disabled = !first; b.onclick = () => { const f = M.spots.find(s => s.room === r && s.kind === 'inside' && s.ready) || M.spots.find(s => s.room === r && s.ready); if (f) go(f.id); }; nav.append(b); }
 // mini plan
 const map = document.getElementById('map'), mg = map.getContext('2d');
 const allPts = M.outlines.flatMap(o => o.pts), X0 = Math.min(...allPts.map(p => p[0])), X1 = Math.max(...allPts.map(p => p[0])), Y0 = Math.min(...allPts.map(p => p[1])), Y1 = Math.max(...allPts.map(p => p[1]));
@@ -124,8 +126,9 @@ cv.addEventListener('pointerup', e => { const was = pts.size; pts.delete(e.point
 cv.addEventListener('pointercancel', e => pts.delete(e.pointerId));
 cv.addEventListener('wheel', e => { e.preventDefault(); fov += e.deltaY * 0.05; draw(); }, { passive: false });
 addEventListener('resize', size); size();
+if (location.hostname === 'localhost') window.TDBG = { THREE, camera, markers, rc, go, SP, get cur() { return cur; }, draw };
 const q = new URLSearchParams(location.search); if (q.has('h')) lon = +q.get('h');
-const start = (q.get('s') && SP.get(q.get('s'))?.ready) ? q.get('s') : (M.spots.find(s => s.room === 'Family' && s.ready) || M.spots.find(s => s.ready))?.id;
+const start = (q.get('s') && SP.get(q.get('s'))?.ready) ? q.get('s') : (M.spots.find(s => s.room === 'Family' && s.kind === 'inside' && s.ready) || M.spots.find(s => s.room === 'Family' && s.ready) || M.spots.find(s => s.ready))?.id;
 if (start) go(start, true); else document.getElementById('load').textContent = 'The renders are still running. Check back shortly.';
 </script>
 </body>
